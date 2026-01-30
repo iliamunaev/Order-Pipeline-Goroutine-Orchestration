@@ -4,6 +4,8 @@ import (
 	"log"
 	"net/http"
 	"time"
+
+	"order-pipeline/internal/handler"
 )
 
 func main() {
@@ -13,6 +15,8 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
+
+	mux.HandleFunc("/order", handler.HandleOrder)
 
 	srv := &http.Server{
 		Addr:    ":8080",
