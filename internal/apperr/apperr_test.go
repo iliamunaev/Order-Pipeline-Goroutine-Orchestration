@@ -21,7 +21,7 @@ func TestKind(t *testing.T) {
 		{name: "nil", err: nil, want: ""},
 		{name: "payment_declined", err: ErrPaymentDeclined, want: "payment_declined"},
 		{name: "payment_declined_wrapped", err: wrapped, want: "payment_declined"},
-		{name: "restaurant_unavailable", err: ErrRestaurantUnavailable, want: "restaurant_unavailable"},
+		{name: "vendor_unavailable", err: ErrVendorUnavailable, want: "vendor_unavailable"},
 		{name: "no_courier", err: ErrNoCourierAvailable, want: "no_courier"},
 		{name: "deadline", err: context.DeadlineExceeded, want: "timeout"},
 		{name: "canceled", err: context.Canceled, want: "canceled"},
@@ -52,7 +52,7 @@ func TestHTTPStatus(t *testing.T) {
 	}{
 		{name: "nil", err: nil, want: http.StatusOK},
 		{name: "payment_declined", err: ErrPaymentDeclined, want: http.StatusBadRequest},
-		{name: "restaurant_unavailable", err: ErrRestaurantUnavailable, want: http.StatusServiceUnavailable},
+		{name: "vendor_unavailable", err: ErrVendorUnavailable, want: http.StatusServiceUnavailable},
 		{name: "no_courier", err: ErrNoCourierAvailable, want: http.StatusServiceUnavailable},
 		{name: "no_courier_wrapped", err: wrapped, want: http.StatusServiceUnavailable},
 		{name: "deadline", err: context.DeadlineExceeded, want: http.StatusGatewayTimeout},

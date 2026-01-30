@@ -7,9 +7,9 @@ import (
 )
 
 var (
-	ErrPaymentDeclined       = errors.New("payment declined")
-	ErrRestaurantUnavailable = errors.New("restaurant unavailable")
-	ErrNoCourierAvailable    = errors.New("no courier available")
+	ErrPaymentDeclined    = errors.New("payment declined")
+	ErrVendorUnavailable  = errors.New("vendor unavailable")
+	ErrNoCourierAvailable = errors.New("no courier available")
 )
 
 func Kind(err error) string {
@@ -20,8 +20,8 @@ func Kind(err error) string {
 	case errors.Is(err, ErrPaymentDeclined):
 		return "payment_declined"
 
-	case errors.Is(err, ErrRestaurantUnavailable):
-		return "restaurant_unavailable"
+	case errors.Is(err, ErrVendorUnavailable):
+		return "vendor_unavailable"
 
 	case errors.Is(err, ErrNoCourierAvailable):
 		return "no_courier"
@@ -45,7 +45,7 @@ func HTTPStatus(err error) int {
 	case errors.Is(err, ErrPaymentDeclined):
 		return http.StatusBadRequest
 
-	case errors.Is(err, ErrRestaurantUnavailable),
+	case errors.Is(err, ErrVendorUnavailable),
 		errors.Is(err, ErrNoCourierAvailable):
 		return http.StatusServiceUnavailable
 
