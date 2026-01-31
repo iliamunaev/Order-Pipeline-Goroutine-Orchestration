@@ -1,8 +1,8 @@
-package service
+package shared
 
 import "time"
 
-func delayForStep(delayMS map[string]int64, step string, defaultDelay time.Duration) time.Duration {
+func DelayForStep(delayMS map[string]int64, step string, defaultDelay time.Duration) time.Duration {
 	if delayMS == nil {
 		return defaultDelay
 	}

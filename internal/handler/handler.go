@@ -13,6 +13,9 @@ import (
 	"order-pipeline/internal/apperr"
 	"order-pipeline/internal/model"
 	"order-pipeline/internal/service"
+	"order-pipeline/internal/service/courier"
+	"order-pipeline/internal/service/payment"
+	"order-pipeline/internal/service/vendor"
 )
 
 type Handler struct {
@@ -92,9 +95,9 @@ func (h *Handler) HandleOrder(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	g.Go(record("payment", func() error { return service.ProcessPayment(ctx, req, h.tr) }))
-	g.Go(record("vendor", func() error { return service.NotifyVendor(ctx, req, h.tr) }))
-	g.Go(record("courier", func() error { return service.AssignCourier(ctx, req, h.pool, h.tr) }))
+	g.Go(record("payment", func() error { return payment.Process(ctx, req, h.tr) }))
+	g.Go(record("vendor", func() error { return vendor.Notify(ctx, req, h.tr) }))
+	g.Go(record("courier", func() error { return courier.Assign(ctx, req, h.pool, h.tr) }))
 
 	err := g.Wait()
 
