@@ -98,8 +98,8 @@ func TestHandler_Stress(t *testing.T) {
 	tr := &service.Tracker{}
 	h := New(pool, tr)
 
-	const workers = 10
-	const iterations = 20
+	const workers = 100
+	const iterations = 200
 
 	var wg sync.WaitGroup
 	errCh := make(chan error, workers*iterations)
