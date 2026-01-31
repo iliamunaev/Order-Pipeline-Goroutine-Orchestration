@@ -15,19 +15,19 @@ import (
 	"order-pipeline/internal/service"
 )
 
-type OrderHandler struct {
+type Handler struct {
 	pool *service.CourierPool
 	tr   *service.Tracker
 }
 
-func NewOrderHandler(pool *service.CourierPool, tr *service.Tracker) *OrderHandler {
+func New(pool *service.CourierPool, tr *service.Tracker) *Handler {
 	if tr == nil {
 		tr = &service.Tracker{}
 	}
-	return &OrderHandler{pool: pool, tr: tr}
+	return &Handler{pool: pool, tr: tr}
 }
 
-func (h *OrderHandler) HandleOrder(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleOrder(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return

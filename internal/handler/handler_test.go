@@ -17,7 +17,7 @@ import (
 func TestOrder_PaymentFailureCancelsOthers(t *testing.T) {
 	pool := service.NewCourierPool(1)
 	tr := &service.Tracker{}
-	h := NewOrderHandler(pool, tr)
+	h := New(pool, tr)
 
 	// Make vendor + courier slower than payment so they get canceled.
 	reqBody := model.OrderRequest{
@@ -89,14 +89,14 @@ func waitRunningZero(t *testing.T, tr *service.Tracker) {
 	t.Fatalf("expected running steps to reach 0, got %d", tr.Running())
 }
 
-func TestOrderHandler_Stress(t *testing.T) {
+func TestHandler_Stress(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping stress test in short mode")
 	}
 
 	pool := service.NewCourierPool(4)
 	tr := &service.Tracker{}
-	h := NewOrderHandler(pool, tr)
+	h := New(pool, tr)
 
 	const workers = 10
 	const iterations = 20

@@ -15,14 +15,14 @@ func newMux() *http.ServeMux {
 	mux := http.NewServeMux()
 	pool := service.NewCourierPool(1)
 	tracker := &service.Tracker{}
-	orderHandler := handler.NewOrderHandler(pool, tracker)
+	Handler := handler.New(pool, tracker)
 
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
 
-	mux.HandleFunc("/order", orderHandler.HandleOrder)
+	mux.HandleFunc("/order", Handler.HandleOrder)
 
 	return mux
 }
