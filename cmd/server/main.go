@@ -10,17 +10,10 @@ import (
 )
 
 func main() {
-	// build dependencies
 	mux := http.NewServeMux()
 	pool := service.NewCourierPool(5)
 	tracker := &service.Tracker{}
 	handler := handler.New(pool, tracker)
-
-	// register routes
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("health_check: ok\n"))
-	})
 
 	mux.HandleFunc("/order", handler.HandleOrder)
 

@@ -1,8 +1,7 @@
 # Order Pipeline
 
-Minimal Go HTTP service that simulates an order workflow with payment, vendor
-notification, and courier assignment steps. Each step can be delayed or forced
-to fail for testing.
+Minimal Go project focused on goroutine orchestration. The HTTP layer is only
+there to trigger concurrent order workflow steps; it is not the goal.
 
 ## Requirements
 
@@ -16,9 +15,8 @@ go run ./cmd/server
 
 Server listens on `:8080`.
 
-## Endpoints
+## Endpoint
 
-- `GET /health` -> `200 ok`
 - `POST /order` -> processes an order
 
 ### Order request body
@@ -58,9 +56,4 @@ curl -i -X POST http://localhost:8080/order \
   -H 'Content-Type: application/json' \
   -d '{"order_id":"o3","amount":10,"delay_ms":{"payment":3000,"vendor":3000,"courier":3000}}'
 ```
-
-## Logging
-
-Requests are logged to `server.log` in the repo root and to stdout. Each entry
-includes a request id, method, path, status, response bytes, and duration.
 
