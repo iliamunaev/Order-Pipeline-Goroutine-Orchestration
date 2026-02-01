@@ -8,8 +8,8 @@ type CourierPool struct {
 	sem chan struct{}
 }
 
-// NewCourierPool creates a pool with at least one slot.
-func NewCourierPool(size int) *CourierPool {
+// New creates a pool with at least one slot.
+func New(size int) *CourierPool {
 	if size <= 0 {
 		size = 1
 	}

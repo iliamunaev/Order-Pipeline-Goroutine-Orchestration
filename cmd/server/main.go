@@ -16,7 +16,7 @@ import (
 // builds dependencies, and registers routes
 func main() {
 	mux := http.NewServeMux()
-	courierPool := pool.NewCourierPool(5) // concurrency limiter
+	courierPool := pool.New(5) // concurrency limiter
 	runTracker := &tracker.Tracker{} // tracking order processing steps
 	handler := handler.New(courierPool, runTracker)
 

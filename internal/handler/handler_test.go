@@ -16,7 +16,7 @@ import (
 )
 
 func TestOrder_PaymentFailureCancelsOthers(t *testing.T) {
-	courierPool := pool.NewCourierPool(1)
+	courierPool := pool.New(1)
 	tr := &tracker.Tracker{}
 	h := New(courierPool, tr)
 
@@ -95,7 +95,7 @@ func TestHandler_Stress(t *testing.T) {
 		t.Skip("skipping stress test in short mode")
 	}
 
-	courierPool := pool.NewCourierPool(4)
+	courierPool := pool.New(4)
 	tr := &tracker.Tracker{}
 	h := New(courierPool, tr)
 
