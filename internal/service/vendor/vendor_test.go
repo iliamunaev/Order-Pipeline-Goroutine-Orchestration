@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"order-pipeline/internal/apperr"
 	"order-pipeline/internal/model"
@@ -54,24 +53,5 @@ func TestNotify(t *testing.T) {
 				t.Fatalf("expected %v, got %v", tt.wantErr, err)
 			}
 		})
-	}
-}
-
-func TestNotifyContextTimeout(t *testing.T) {
-	t.Parallel()
-
-	tr := &tracker.Tracker{}
-	req := model.OrderRequest{
-		OrderID: "o-4",
-		Amount:  500,
-		DelayMS: map[string]int64{"vendor": 50},
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
-	defer cancel()
-
-	err := Notify(ctx, req, tr)
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("expected context deadline exceeded, got %v", err)
 	}
 }

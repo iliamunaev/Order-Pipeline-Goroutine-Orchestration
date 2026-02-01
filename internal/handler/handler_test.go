@@ -153,6 +153,16 @@ func TestHandleOrderValidation(t *testing.T) {
 	}
 }
 
+func TestNewDefaultsTracker(t *testing.T) {
+	t.Parallel()
+
+	courierPool := pool.New(1)
+	h := New(courierPool, nil)
+	if h.tr == nil {
+		t.Fatal("expected tracker to be initialized")
+	}
+}
+
 // waitRunningZero waits for the running steps to reach 0.
 func waitRunningZero(t *testing.T, tr *tracker.Tracker) {
 	t.Helper()
