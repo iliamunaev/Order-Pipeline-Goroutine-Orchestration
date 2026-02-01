@@ -1,3 +1,5 @@
+// Package courier contains the courier assignment step for an order workflow.
+// It enforces concurrency limits and simulates assignment delays and failures.
 package courier
 
 import (
@@ -7,11 +9,13 @@ import (
 
 	"order-pipeline/internal/apperr"
 	"order-pipeline/internal/model"
-	"order-pipeline/internal/service"
 	"order-pipeline/internal/service/shared"
+	"order-pipeline/internal/service/pool"
+	"order-pipeline/internal/service/tracker"
 )
 
-func Assign(ctx context.Context, req model.OrderRequest, pool *service.CourierPool, tr *service.Tracker) error {
+// Assign runs the courier assignment step for an order.
+func Assign(ctx context.Context, req model.OrderRequest, pool *pool.CourierPool, tr *tracker.Tracker) error {
 	tr.Inc()
 	defer tr.Dec()
 

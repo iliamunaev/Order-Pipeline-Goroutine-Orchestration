@@ -1,206 +1,96 @@
-# Go Concurrency & Error-Handling Write-Up
-**Project: Order Pipeline (Payment → Vendor → Courier)**
+## Go Question 1: Goroutine orchestration
 
-## Project summary
+**Options**
+- `sync.WaitGroup` for waiting on a fixed set of goroutines.
+- `errgroup.WithContext` for waiting plus error propagation and cancellation.
+- Result channels or done channels when you want to fan-in results.
+- Worker pools with buffered channels for bounded concurrency.
 
-This project models a backend order flow where **three independent steps** run in parallel:
+**Choice**
+I prefer `errgroup.WithContext` for request-scoped work because it gives me:
+- a single `Wait()` that returns the first error
+- automatic cancellation of the other goroutines
+- a shared context to pass into work functions
 
-- `payment` — business validation / payment provider
-- `vendor` — notify external vendor system
-- `courier` — assign a limited shared resource
+**Gotchas**
+- Remember to check `ctx.Done()` inside workers.
+- Protect shared state (map writes) with a mutex.
+- Don’t leak goroutines by forgetting to return on cancel.
 
-The system is designed to:
-- run steps concurrently
-- cancel remaining work on failure
-- classify errors meaningfully
-- shut down cleanly without goroutine leaks
-- be testable under the race detector
+**Error handling**
+- With `errgroup`, return errors from each worker and handle `g.Wait()` once.
+- With `WaitGroup`, you need separate error aggregation (channel or shared struct).
 
-The implementation is intentionally small but mirrors real backend concerns.
-
----
-
-## Question 1  
-### What are some ways to orchestrate goroutines? How do you wait for multiple goroutines? Error handling? Gotchas?
-
-### Approaches available
-- `sync.WaitGroup` — basic synchronization, no error propagation
-- channels — flexible but easy to leak or deadlock
-- `errgroup.Group` — structured concurrency with cancellation
-
- I need to call an external service, but I must do it in parallel, with the constraint that if any request fails, the handler should return immediately.
-
-### Chosen approach
-**`errgroup.WithContext`**
-
-### Why
-- Combines **waiting**, **first-error propagation**, and **cancellation**
-- Enforces a parent-child relationship between goroutines
-- Avoids fire-and-forget goroutines
-
-In the handler:
-```go
-g, ctx := errgroup.WithContext(ctx)
-
-g.Go(func() error { return Process(ctx, req, tr) })
-g.Go(func() error { return Notify(ctx, req, tr) })
-g.Go(func() error { return Assign(ctx, req, pool, tr) })
-
-err := g.Wait()
-```
-
-If any step fails:
-- `errgroup` returns the error
-- the shared context is canceled
-- remaining goroutines exit cooperatively
-
-### Gotchas encountered
-- **Cancellation is not retroactive**  
-  A fast goroutine may complete before cancellation occurs.
-- **Blocking operations must be context-aware**  
-  `time.Sleep`, channel sends, and semaphore acquisition must observe `ctx.Done()`.
-
-### Error handling
-- Each step returns wrapped sentinel errors (`fmt.Errorf("%w", ErrX)`).
-- The handler classifies errors centrally using `errors.Is`.
+**Project example**
+- We use `errgroup.WithContext` in `internal/handler/handler.go` to run payment,
+  vendor, and courier steps concurrently and to cancel on first failure.
 
 ---
 
-## Question 2  
-### How do you cancel background goroutines? How do you verify they exited?
+## Go Question 2: Canceling background tasks
 
-### Cancellation mechanism
-- Request-scoped `context.WithTimeout`
-- `errgroup.WithContext` propagates cancellation automatically
+**Scenario**
+- Orders have a 2s deadline. If one step fails, the rest should stop.
 
-All blocking points are context-aware:
-```go
-select {
-case <-timer.C:
-case <-ctx.Done():
-    return ctx.Err()
-}
-```
+**Signal**
+- We use `context.WithTimeout` and `errgroup.WithContext`. When a goroutine returns
+  an error, the derived context is canceled.
 
-### Real scenario modeled
-- Payment failure cancels vendor notification and courier assignment
-- Request timeout cancels all steps
-
-### Verification
-I did not rely on assumptions.
-
-An **atomic tracker** counts active step goroutines:
-```go
-type Tracker struct {
-    running atomic.Int64
-}
-```
-
-Each step:
-```go
-tr.Inc()
-defer tr.Dec()
-```
-
-Tests wait until `tracker.Running() == 0` after handler completion.  
-This detects leaked or stuck goroutines deterministically.
+**Verification**
+- Each step uses `shared.SleepOrDone` and `CourierPool.Acquire`, which honor
+  `ctx.Done()`. Tests check `Tracker.Running()` returns to zero after completion.
 
 ---
 
-## Question 3  
-### How do you differentiate error kinds and take different actions?
+## Go Question 3: Error differentiation
 
-### Error strategy
-- Use **sentinel errors** for semantic categories
-- Wrap errors with `%w`
-- Classify centrally with `errors.Is`
+**Approaches**
+- Sentinel errors + `errors.Is`
+- Custom error types + `errors.As`
+- Error wrapping with `%w` for context
 
-Sentinel errors:
-- `ErrPaymentDeclined` — business error (no retry)
-- `ErrVendorUnavailable` — transient dependency failure
-- `ErrNoCourierAvailable` — resource exhaustion
+**Preference**
+- Sentinel errors + `errors.Is` for simplicity and consistent mapping.
 
-Classification:
-```go
-switch {
-case errors.Is(err, ErrPaymentDeclined):
-    return "payment_declined"
-case errors.Is(err, context.DeadlineExceeded):
-    return "timeout"
-}
-```
-
-HTTP mapping:
-- payment declined → `400`
-- capacity errors → `503`
-- timeout → `504`
-
-### Why this matters
-- Callers can react appropriately (retry vs fix input)
-- Internal errors are not leaked
-- Error handling remains stable even when errors are wrapped
+**Project example**
+- We wrap step failures and map them via `apperr.Kind/HTTPStatus`
+  (e.g., `ErrPaymentDeclined`, `ErrVendorUnavailable`, `ErrNoCourierAvailable`).
 
 ---
 
-## Question 4  
-### OS threads vs goroutines? Scheduling model? Practical implications?
+## Go Question 4: OS threads vs goroutines
 
-### Key differences
-- Goroutines are user-space, lightweight (KB stacks)
-- OS threads are kernel-scheduled and heavyweight
-- Goroutines multiplex onto OS threads (M:N model)
+**Key differences**
+- Goroutines are lightweight (small stack, cheap to create).
+- OS threads are heavier and managed by the OS.
 
-### Scheduling
-- Go uses **preemptive scheduling**
-- Since Go 1.14, goroutines can be asynchronously preempted
-- Blocking syscalls and cgo still affect scheduling
+**Scheduling**
+- Go uses an M:N scheduler (many goroutines multiplexed onto fewer threads).
+- Scheduling is preemptive (since Go 1.14+), so long-running goroutines can be
+  interrupted by the runtime.
 
-### Practical implications in this project
-- Goroutines must not block indefinitely
-- Resource usage is bounded via a courier pool (channel semaphore)
-- Context-aware blocking prevents scheduler starvation
+**Implications**
+- It’s safe to spawn many goroutines, but you still need to manage shared state,
+  cancellation, and backpressure.
 
 ---
 
-## Question 5  
-### Improving test coverage, catching bugs, and data races
+## Go Question 5: Test design improvements
 
-### Risks addressed
-- Goroutine leaks on cancellation
-- Steps ignoring context
-- Data races when collecting step results
+**What was undertested**
+- Concurrency paths and failure propagation.
 
-### Test design
-- Handler-level tests using `httptest`
-- Deterministic cancellation via injected delays
-- Timeout tests covering `DeadlineExceeded`
+**Restructure**
+- Added a stress test with multiple goroutines.
+- Converted service tests to table-driven style.
 
-### Edge cases
-- payment failure
-- request timeout
-- invalid JSON
-- wrong HTTP method
+**Edge cases added**
+- Payment failure cancels other steps.
+- Courier assignment timeout while pool is saturated.
+- Delay overrides per step.
 
-### Data race detection
-```bash
-go test -race ./...
-```
+**Why it prevents regressions**
+- Exercises concurrency, cancellation, and error mapping under load.
 
-Shared state is protected using `sync.Mutex` or atomics.
-
-### Regression prevention
-Any future change that leaks goroutines or blocks cancellation causes tests to fail.
-
----
-
-## Final takeaway
-
-This project demonstrates:
-- Structured concurrency
-- Cooperative cancellation
-- Semantic error handling
-- Explicit verification of correctness
-- Production-grade concurrency habits
-
-The scope is small, but the patterns scale directly to real backend services.
-
+**How to catch data races**
+- Run `go test -race ./...` regularly.

@@ -1,3 +1,5 @@
+// Package handler exposes HTTP handlers that orchestrate the concurrent
+// order-processing steps and shape responses.
 package handler
 
 import (
@@ -12,24 +14,28 @@ import (
 
 	"order-pipeline/internal/apperr"
 	"order-pipeline/internal/model"
-	"order-pipeline/internal/service"
 	"order-pipeline/internal/service/courier"
+	"order-pipeline/internal/service/pool"
+	"order-pipeline/internal/service/tracker"
 	"order-pipeline/internal/service/payment"
 	"order-pipeline/internal/service/vendor"
 )
 
+// Handler wires HTTP requests to order processing steps.
 type Handler struct {
-	pool *service.CourierPool
-	tr   *service.Tracker
+	pool *pool.CourierPool
+	tr   *tracker.Tracker
 }
 
-func New(pool *service.CourierPool, tr *service.Tracker) *Handler {
+// New creates a Handler with the provided dependencies.
+func New(pool *pool.CourierPool, tr *tracker.Tracker) *Handler {
 	if tr == nil {
-		tr = &service.Tracker{}
+		tr = &tracker.Tracker{}
 	}
 	return &Handler{pool: pool, tr: tr}
 }
 
+// HandleOrder processes an order request.
 func (h *Handler) HandleOrder(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)

@@ -1,3 +1,5 @@
+// Package shared provides helper functions used by service steps,
+// such as delay calculation and cancellation-aware sleeps.
 package shared
 
 import (
@@ -5,6 +7,7 @@ import (
 	"time"
 )
 
+// SleepOrDone waits for the duration or returns early on context cancellation.
 func SleepOrDone(ctx context.Context, d time.Duration) error {
 	if d <= 0 {
 		return nil

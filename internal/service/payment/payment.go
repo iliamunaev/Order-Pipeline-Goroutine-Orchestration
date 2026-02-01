@@ -1,3 +1,5 @@
+// Package payment contains the payment step logic for an order workflow.
+// It validates amounts and simulates failures and delays.
 package payment
 
 import (
@@ -7,11 +9,12 @@ import (
 
 	"order-pipeline/internal/apperr"
 	"order-pipeline/internal/model"
-	"order-pipeline/internal/service"
 	"order-pipeline/internal/service/shared"
+	"order-pipeline/internal/service/tracker"
 )
 
-func Process(ctx context.Context, req model.OrderRequest, tr *service.Tracker) error {
+// Process runs the payment step for an order.
+func Process(ctx context.Context, req model.OrderRequest, tr *tracker.Tracker) error {
 	tr.Inc()
 	defer tr.Dec()
 

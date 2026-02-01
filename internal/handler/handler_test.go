@@ -11,13 +11,14 @@ import (
 	"time"
 
 	"order-pipeline/internal/model"
-	"order-pipeline/internal/service"
+	"order-pipeline/internal/service/pool"
+	"order-pipeline/internal/service/tracker"
 )
 
 func TestOrder_PaymentFailureCancelsOthers(t *testing.T) {
-	pool := service.NewCourierPool(1)
-	tr := &service.Tracker{}
-	h := New(pool, tr)
+	courierPool := pool.NewCourierPool(1)
+	tr := &tracker.Tracker{}
+	h := New(courierPool, tr)
 
 	// Make vendor + courier slower than payment so they get canceled.
 	reqBody := model.OrderRequest{
@@ -76,7 +77,7 @@ func TestOrder_PaymentFailureCancelsOthers(t *testing.T) {
 	}
 }
 
-func waitRunningZero(t *testing.T, tr *service.Tracker) {
+func waitRunningZero(t *testing.T, tr *tracker.Tracker) {
 	t.Helper()
 
 	deadline := time.Now().Add(1 * time.Second)
@@ -94,9 +95,9 @@ func TestHandler_Stress(t *testing.T) {
 		t.Skip("skipping stress test in short mode")
 	}
 
-	pool := service.NewCourierPool(4)
-	tr := &service.Tracker{}
-	h := New(pool, tr)
+	courierPool := pool.NewCourierPool(4)
+	tr := &tracker.Tracker{}
+	h := New(courierPool, tr)
 
 	const workers = 100
 	const iterations = 200

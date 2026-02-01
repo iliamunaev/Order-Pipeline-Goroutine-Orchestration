@@ -8,14 +8,15 @@ import (
 
 	"order-pipeline/internal/apperr"
 	"order-pipeline/internal/model"
-	"order-pipeline/internal/service"
+	"order-pipeline/internal/service/pool"
+	"order-pipeline/internal/service/tracker"
 )
 
 func TestAssign(t *testing.T) {
 	t.Parallel()
 
-	tr := &service.Tracker{}
-	pool := service.NewCourierPool(1)
+	tr := &tracker.Tracker{}
+	pool := pool.NewCourierPool(1)
 
 	tests := []struct {
 		name    string
@@ -61,8 +62,8 @@ func TestAssign(t *testing.T) {
 func TestAssignContextTimeout(t *testing.T) {
 	t.Parallel()
 
-	tr := &service.Tracker{}
-	pool := service.NewCourierPool(1)
+	tr := &tracker.Tracker{}
+	pool := pool.NewCourierPool(1)
 	if err := pool.Acquire(context.Background()); err != nil {
 		t.Fatalf("unexpected acquire error: %v", err)
 	}

@@ -1,3 +1,5 @@
+// Command server starts a minimal HTTP server that triggers the order workflow.
+// The server exists to demonstrate goroutine orchestration.
 package main
 
 import (
@@ -6,15 +8,19 @@ import (
 	"time"
 
 	"order-pipeline/internal/handler"
-	"order-pipeline/internal/service"
+	"order-pipeline/internal/service/pool"
+	"order-pipeline/internal/service/tracker"
 )
 
+// main starts the HTTP server, 
+// builds dependencies, and registers routes
 func main() {
 	mux := http.NewServeMux()
-	pool := service.NewCourierPool(5)
-	tracker := &service.Tracker{}
-	handler := handler.New(pool, tracker)
+	courierPool := pool.NewCourierPool(5) // concurrency limiter
+	runTracker := &tracker.Tracker{} // tracking order processing steps
+	handler := handler.New(courierPool, runTracker)
 
+	// register routes
 	mux.HandleFunc("/order", handler.HandleOrder)
 
 	srv := &http.Server{

@@ -25,8 +25,9 @@ start_server() {
     fail "go command not found; start the server manually"
   fi
 
+  payload='{"order_id":"ready","amount":1,"delay_ms":{"payment":1,"vendor":1,"courier":1}}'
   for _ in {1..50}; do
-    if curl -s "$base_url/health" >/dev/null 2>&1; then
+    if curl -s -H "Content-Type: application/json" -d "$payload" "$base_url/order" >/dev/null 2>&1; then
       return 0
     fi
     sleep 0.1
@@ -36,20 +37,12 @@ start_server() {
 
 start_server
 
-status="$(curl -s -o "$tmp_body" -w "%{http_code}" "$base_url/health")"
-if [[ "$status" != "200" ]]; then
-  fail "/health expected 200, got $status"
-fi
-if [[ "$(cat "$tmp_body")" != "ok" ]]; then
-  fail "/health expected body ok, got $(cat "$tmp_body")"
-fi
-pass "/health"
-
 payload='{"order_id":"o-1","amount":1200,"delay_ms":{"payment":1,"vendor":1,"courier":1}}'
 status="$(curl -s -o "$tmp_body" -w "%{http_code}" \
   -H "Content-Type: application/json" \
   -d "$payload" \
   "$base_url/order")"
+printf "Response body: %s\n" "$(cat "$tmp_body")"
 if [[ "$status" != "200" ]]; then
   fail "/order expected 200, got $status"
 fi

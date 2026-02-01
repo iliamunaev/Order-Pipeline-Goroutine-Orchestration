@@ -7,13 +7,13 @@ import (
 
 	"order-pipeline/internal/apperr"
 	"order-pipeline/internal/model"
-	"order-pipeline/internal/service"
+	"order-pipeline/internal/service/tracker"
 )
 
 func TestProcess(t *testing.T) {
 	t.Parallel()
 
-	tr := &service.Tracker{}
+	tr := &tracker.Tracker{}
 
 	tests := []struct {
 		name    string
