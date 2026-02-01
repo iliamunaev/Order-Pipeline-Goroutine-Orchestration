@@ -36,6 +36,8 @@ func New(pool *pool.CourierPool, tr *tracker.Tracker) *Handler {
 }
 
 // HandleOrder processes an order request.
+// It validates the request, orchestrates the concurrent steps, 
+// and writes the response.
 func (h *Handler) HandleOrder(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -44,7 +46,8 @@ func (h *Handler) HandleOrder(w http.ResponseWriter, r *http.Request) {
 
 	var req model.OrderRequest
 	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
+	dec.DisallowUnknownFields() // prevent JSON injection
+	// decode the request
 	if err := dec.Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, model.OrderResponse{
 			Status: "error",
@@ -53,6 +56,7 @@ func (h *Handler) HandleOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// validate the request
 	if req.OrderID == "" {
 		writeJSON(w, http.StatusBadRequest, model.OrderResponse{
 			Status:  "error",
@@ -62,19 +66,23 @@ func (h *Handler) HandleOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// create a context with a timeout
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
 
+	// create an error group with the context
 	g, ctx := errgroup.WithContext(ctx)
 
+	// create a map to store the results
 	results := make(map[string]model.StepResult, 3)
 	var mu sync.Mutex
 
+	// create a function to record the results
 	record := func(name string, fn func() error) func() error {
 		return func() error {
 			start := time.Now()
 			err := fn()
-			durMS := time.Since(start).Milliseconds()
+			durMS := time.Since(start).Milliseconds() // calculate the duration of the step
 
 			st := "ok"
 			detail := ""
@@ -88,6 +96,7 @@ func (h *Handler) HandleOrder(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
+			// store the results in the map
 			mu.Lock()
 			results[name] = model.StepResult{
 				Name:       name,
@@ -101,18 +110,22 @@ func (h *Handler) HandleOrder(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// start the concurrent steps
+	// record the results of the steps
 	g.Go(record("payment", func() error { return payment.Process(ctx, req, h.tr) }))
 	g.Go(record("vendor", func() error { return vendor.Notify(ctx, req, h.tr) }))
 	g.Go(record("courier", func() error { return courier.Assign(ctx, req, h.pool, h.tr) }))
 
 	err := g.Wait()
 
+	// create the response
 	resp := model.OrderResponse{
 		Status:  "ok",
 		OrderID: req.OrderID,
 		Steps:   flattenResults(results),
 	}
 
+	// if there was an error, set the response to error
 	if err != nil {
 		resp.Status = "error"
 		resp.Error = &model.ErrorPayload{
@@ -122,15 +135,17 @@ func (h *Handler) HandleOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	status := apperr.HTTPStatus(err)
-	writeJSON(w, status, resp)
+	writeJSON(w, status, resp) // write the response
 }
 
+// writeJSON writes the response to the HTTP writer
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
 }
 
+// flattenResults flattens the results map into a slice of step results
 func flattenResults(m map[string]model.StepResult) []model.StepResult {
 	out := make([]model.StepResult, 0, 3)
 	if r, ok := m["payment"]; ok {
