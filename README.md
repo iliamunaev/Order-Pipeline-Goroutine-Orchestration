@@ -28,29 +28,50 @@ go run ./cmd/server
 ```
 Server listens on `:8080`.
 
+Clean port if needed:
+```bash
+sudo lsof -i :8080
+```
+```bash
+kill <process>
+```
+
+## Endpoint
+
+- `POST /order` -> processes an order
 
 In other console run:
 ```bash
+# 200 OK
 curl -i -X POST http://localhost:8080/order \
   -H 'Content-Type: application/json' \
   -d '{"order_id":"o1","amount":10}'
 ```
 
 ```bash
+# 400 Bad Request
+# "error":{"kind":"payment_declined","message":"order failed"}}
 curl -i -X POST http://localhost:8080/order \
   -H 'Content-Type: application/json' \
   -d '{"order_id":"o2","amount":10,"fail_step":"payment","delay_ms":{"vendor":800,"courier":800}}'
 ```
 
 ```bash
+# 504 Gateway Timeout
+# "error":{"kind":"timeout","message":"order failed"}}
 curl -i -X POST http://localhost:8080/order \
   -H 'Content-Type: application/json' \
   -d '{"order_id":"o3","amount":10,"delay_ms":{"payment":3000,"vendor":3000,"courier":3000}}'
 ```
 
-## Endpoint
+```bash
+# 503 Service Unavailable
+# "error":{"kind":"vendor_unavailable","message":"order failed"}}
+curl -i -X POST http://localhost:8080/order \
+  -H 'Content-Type: application/json' \
+  -d '{"order_id":"o2","amount":10,"fail_step":"vendor","delay_ms":{"vendor":800,"courier":800}}'
+```
 
-- `POST /order` -> processes an order
 
 ### Order request body
 
