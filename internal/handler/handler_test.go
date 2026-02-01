@@ -15,8 +15,8 @@ import (
 	"order-pipeline/internal/service/tracker"
 )
 
-// TestOrder_PaymentFailureCancelsOthers tests that when payment fails, 
-// the other steps are canceled.	
+// TestOrder_PaymentFailureCancelsOthers tests that when payment fails,
+// the other steps are canceled.
 func TestOrder_PaymentFailureCancelsOthers(t *testing.T) {
 	courierPool := pool.New(1)
 	tr := &tracker.Tracker{}
@@ -38,7 +38,7 @@ func TestOrder_PaymentFailureCancelsOthers(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 
-	// create a request	
+	// create a request
 	req := httptest.NewRequest(http.MethodPost, "/order", bytes.NewReader(b))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -180,8 +180,8 @@ func waitRunningZero(t *testing.T, tr *tracker.Tracker) {
 // TestHandler_Stress tests the stress of the handler.
 // It creates a number of workers that each send a request to the handler.
 // It then checks the response status code and the response body.
-// Payment failure for 20% of the requests, 
-// Vendor failure for 14% of the requests, and 
+// Payment failure for 20% of the requests,
+// Vendor failure for 14% of the requests, and
 // Courier failure for 10% of the requests.
 func TestHandler_Stress(t *testing.T) {
 	if testing.Short() {
@@ -192,12 +192,11 @@ func TestHandler_Stress(t *testing.T) {
 	tr := &tracker.Tracker{}
 	h := New(courierPool, tr)
 
-	const workers = 100 // number of workers
+	const workers = 100    // number of workers
 	const iterations = 200 // number of iterations per worker
 
 	var wg sync.WaitGroup
 	errCh := make(chan error, workers*iterations)
-
 
 	for w := 0; w < workers; w++ {
 		wg.Add(1)
@@ -205,7 +204,7 @@ func TestHandler_Stress(t *testing.T) {
 			defer wg.Done()
 
 			for i := 0; i < iterations; i++ { // start the iterations
-				idx := worker*iterations + i 
+				idx := worker*iterations + i
 				reqBody := model.OrderRequest{
 					OrderID: fmt.Sprintf("o-%d", idx),
 					Amount:  1200,

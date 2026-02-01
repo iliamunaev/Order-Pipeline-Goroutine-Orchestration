@@ -23,11 +23,11 @@ type StepResult struct {
 	Name       string `json:"name"`
 	Status     string `json:"status"` // "ok" | "error" | "canceled"
 	DurationMS int64  `json:"duration_ms"`
-	Detail     string `json:"detail,omitempty"` // optional
+	Detail     string `json:"detail,omitempty"` // optional, human-readable error detail
 }
 
 // ErrorPayload describes an error response.
 type ErrorPayload struct {
 	Kind    string `json:"kind"`              // "payment_declined", "timeout"
-	Message string `json:"message,omitempty"` // human-readable
+	Message string `json:"message,omitempty"` // optional, human-readable error message
 }

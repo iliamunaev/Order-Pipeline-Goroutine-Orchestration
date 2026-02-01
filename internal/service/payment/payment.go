@@ -14,6 +14,10 @@ import (
 )
 
 // Process runs the payment step for an order.
+// It increments the tracker,
+// sleeps for the delay,
+// returns an error if the payment fails,
+// and returns an error if the amount is less than or equal to 0.
 func Process(ctx context.Context, req model.OrderRequest, tr *tracker.Tracker) error {
 	tr.Inc()
 	defer tr.Dec()

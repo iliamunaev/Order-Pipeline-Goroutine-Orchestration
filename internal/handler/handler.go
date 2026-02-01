@@ -15,9 +15,9 @@ import (
 	"order-pipeline/internal/apperr"
 	"order-pipeline/internal/model"
 	"order-pipeline/internal/service/courier"
+	"order-pipeline/internal/service/payment"
 	"order-pipeline/internal/service/pool"
 	"order-pipeline/internal/service/tracker"
-	"order-pipeline/internal/service/payment"
 	"order-pipeline/internal/service/vendor"
 )
 
@@ -36,7 +36,7 @@ func New(pool *pool.CourierPool, tr *tracker.Tracker) *Handler {
 }
 
 // HandleOrder processes an order request.
-// It validates the request, orchestrates the concurrent steps, 
+// It validates the request, orchestrates the concurrent steps,
 // and writes the response.
 func (h *Handler) HandleOrder(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -145,7 +145,8 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-// flattenResults flattens the results map into a slice of step results
+// flattenResults returns a slice of step results in the order of
+// payment, vendor, and courier.
 func flattenResults(m map[string]model.StepResult) []model.StepResult {
 	out := make([]model.StepResult, 0, 3)
 	if r, ok := m["payment"]; ok {

@@ -1,3 +1,4 @@
+// Package apperr provides error handling and HTTP status code mapping.
 package apperr
 
 import (
@@ -12,6 +13,7 @@ var (
 	ErrNoCourierAvailable = errors.New("no courier available")
 )
 
+// Kind returns the kind of error as a string.
 func Kind(err error) string {
 	switch {
 	case err == nil:
@@ -37,6 +39,12 @@ func Kind(err error) string {
 	}
 }
 
+// HTTPStatus returns the HTTP status code for the error.
+// It returns http.StatusOK for no error,
+// http.StatusBadRequest for payment declined,
+// http.StatusServiceUnavailable for vendor unavailable or no courier available,
+// http.StatusGatewayTimeout for timeout,
+// and http.StatusInternalServerError for other errors.
 func HTTPStatus(err error) int {
 	switch {
 	case err == nil:

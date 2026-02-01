@@ -9,12 +9,15 @@ import (
 
 	"order-pipeline/internal/apperr"
 	"order-pipeline/internal/model"
-	"order-pipeline/internal/service/shared"
 	"order-pipeline/internal/service/pool"
+	"order-pipeline/internal/service/shared"
 	"order-pipeline/internal/service/tracker"
 )
 
 // Assign runs the courier assignment step for an order.
+// It acquires a courier from the pool,
+// sleeps for the delay,
+// and returns an error if the courier fails.
 func Assign(ctx context.Context, req model.OrderRequest, pool *pool.CourierPool, tr *tracker.Tracker) error {
 	tr.Inc()
 	defer tr.Dec()

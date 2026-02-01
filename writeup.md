@@ -7,38 +7,38 @@
 - Worker pools with buffered channels for bounded concurrency.
 
 **Choice**
-I prefer `errgroup.WithContext` for request-scoped work because it gives me:
-- a single `Wait()` that returns the first error
-- automatic cancellation of the other goroutines
-- a shared context to pass into work functions
+I use `errgroup.WithContext` in the handler because it gives me:
+- one `Wait()` that returns the first error
+- automatic cancellation of sibling goroutines
+- a shared context to pass into step functions
 
 **Gotchas**
-- Remember to check `ctx.Done()` inside workers.
-- Protect shared state (map writes) with a mutex.
-- Don’t leak goroutines by forgetting to return on cancel.
+- Workers must check `ctx.Done()` and return promptly.
+- Shared data (results map) needs a mutex.
+- Avoid goroutine leaks by always returning on cancel.
 
 **Error handling**
 - With `errgroup`, return errors from each worker and handle `g.Wait()` once.
-- With `WaitGroup`, you need separate error aggregation (channel or shared struct).
+- With `WaitGroup`, add a separate error channel/aggregation.
 
 **Project example**
-- We use `errgroup.WithContext` in `internal/handler/handler.go` to run payment,
-  vendor, and courier steps concurrently and to cancel on first failure.
+- `internal/handler/handler.go` runs payment, vendor, and courier concurrently
+  and cancels the rest on first failure.
 
 ---
 
 ## Go Question 2: Canceling background tasks
 
 **Scenario**
-- Orders have a 2s deadline. If one step fails, the rest should stop.
+- Orders have a 2s deadline. If any step fails, the rest should stop.
 
 **Signal**
-- We use `context.WithTimeout` and `errgroup.WithContext`. When a goroutine returns
-  an error, the derived context is canceled.
+- `context.WithTimeout` + `errgroup.WithContext` cancels the derived context
+  when a goroutine returns an error.
 
 **Verification**
-- Each step uses `shared.SleepOrDone` and `CourierPool.Acquire`, which honor
-  `ctx.Done()`. Tests check `Tracker.Running()` returns to zero after completion.
+- `shared.SleepOrDone` and pool `Acquire` return early on `ctx.Done()`.
+- `Tracker.Running()` is checked in tests to ensure goroutines exit.
 
 ---
 
@@ -50,28 +50,27 @@ I prefer `errgroup.WithContext` for request-scoped work because it gives me:
 - Error wrapping with `%w` for context
 
 **Preference**
-- Sentinel errors + `errors.Is` for simplicity and consistent mapping.
+- Sentinel errors + `errors.Is` for simple mapping.
 
 **Project example**
-- We wrap step failures and map them via `apperr.Kind/HTTPStatus`
-  (e.g., `ErrPaymentDeclined`, `ErrVendorUnavailable`, `ErrNoCourierAvailable`).
+- `apperr.Kind/HTTPStatus` map `ErrPaymentDeclined`,
+  `ErrVendorUnavailable`, and `ErrNoCourierAvailable` to client responses.
 
 ---
 
 ## Go Question 4: OS threads vs goroutines
 
 **Key differences**
-- Goroutines are lightweight (small stack, cheap to create).
+- Goroutines are lightweight (small stack, cheap to spawn).
 - OS threads are heavier and managed by the OS.
 
 **Scheduling**
-- Go uses an M:N scheduler (many goroutines multiplexed onto fewer threads).
-- Scheduling is preemptive (since Go 1.14+), so long-running goroutines can be
-  interrupted by the runtime.
+- Go uses an M:N scheduler.
+- Preemptive since Go 1.14+, so long-running goroutines get interrupted.
 
 **Implications**
-- It’s safe to spawn many goroutines, but you still need to manage shared state,
-  cancellation, and backpressure.
+- You can spawn many goroutines, but must manage shared state, cancellation,
+  and backpressure.
 
 ---
 
@@ -81,13 +80,14 @@ I prefer `errgroup.WithContext` for request-scoped work because it gives me:
 - Concurrency paths and failure propagation.
 
 **Restructure**
-- Added a stress test with multiple goroutines.
-- Converted service tests to table-driven style.
+- Added handler validation tests and a stress test.
+- Kept service tests table-driven for payment, vendor, and courier.
+- Added direct unit tests for pool and tracker (including concurrency).
 
 **Edge cases added**
 - Payment failure cancels other steps.
-- Courier assignment timeout while pool is saturated.
-- Delay overrides per step.
+- Pool acquisition timeout when saturated.
+- Invalid JSON and missing fields at the handler level.
 
 **Why it prevents regressions**
 - Exercises concurrency, cancellation, and error mapping under load.

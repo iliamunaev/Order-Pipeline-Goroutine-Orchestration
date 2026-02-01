@@ -14,6 +14,10 @@ import (
 )
 
 // Notify runs the vendor notification step for an order.
+// It increments the tracker,
+// sleeps for the delay,
+// returns an error if the vendor fails,
+// and returns nil if the vendor succeeds.
 func Notify(ctx context.Context, req model.OrderRequest, tr *tracker.Tracker) error {
 	tr.Inc()
 	defer tr.Dec()
