@@ -18,12 +18,15 @@ func Notify(ctx context.Context, req model.OrderRequest, tr *tracker.Tracker) er
 	tr.Inc()
 	defer tr.Dec()
 
+	// delay the vendor notification
 	delay := shared.DelayForStep(req.DelayMS, "vendor", 200*time.Millisecond)
 
+	// sleep or done
 	if err := shared.SleepOrDone(ctx, delay); err != nil {
 		return err
 	}
 
+	// if the vendor fails, return an error
 	if req.FailStep == "vendor" {
 		return fmt.Errorf("vendor notify: %w", apperr.ErrVendorUnavailable)
 	}
