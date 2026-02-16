@@ -1,4 +1,4 @@
-.PHONY: all test bench fuzz
+.PHONY: all test bench fuzz test-clean
 
 all: test fuzz bench
 
@@ -22,3 +22,6 @@ fuzz:
 	out="artifacts/fuzz-$$ts.txt"; \
 	echo "Run at: $$(date '+%Y-%m-%d %H:%M:%S %Z')" | tee "$$out"; \
 	go test ./internal/service/courier_pool -run=^$$ -fuzz=FuzzCourierPoolAcquireRelease -fuzztime=10s | tee -a "$$out"
+
+test-clean:
+	rm -rf artifacts/*
