@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"order-pipeline/internal/handler"
-	"order-pipeline/internal/service/pool"
+	cp "order-pipeline/internal/service/courier_pool"
 	"order-pipeline/internal/service/tracker"
 )
 
@@ -26,7 +26,7 @@ func main() {
 func newMux() *http.ServeMux {
 	mux := http.NewServeMux()
 
-	courierPool := pool.New(5)
+	courierPool := cp.New(5)
 	tr := &tracker.Tracker{}
 	h := handler.New(courierPool, tr)
 

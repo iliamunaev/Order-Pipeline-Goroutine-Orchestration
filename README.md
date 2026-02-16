@@ -145,3 +145,26 @@ go test ./... -race
 │           └── vendor_test.go
 └── README.md
 ```
+
+
+## Testing
+
+Run all tests:
+```bash
+make test all
+```
+
+Run test, except benchmark, and fuzz
+```bash
+make test
+```
+
+Run benchmark tests:
+```bash
+make bench
+```
+
+Run fuzzing tests:
+```bash
+make fuzz
+```

@@ -1,5 +1,4 @@
-// Package pool provides concurrency limiters for service steps.
-package pool
+package courier_pool
 
 import "context"
 

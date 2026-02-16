@@ -9,25 +9,26 @@ import (
 
 	"order-pipeline/internal/apperr"
 	"order-pipeline/internal/model"
-	"order-pipeline/internal/service/pool"
 	"order-pipeline/internal/service/shared"
 	"order-pipeline/internal/service/tracker"
 )
 
+type Limiter interface {
+	Acquire(context.Context) error
+	Release()
+}
+
 // Assign runs the courier assignment step for an order.
-// It acquires a courier from the pool,
-// sleeps for the delay,
-// and returns an error if the courier fails.
-func Assign(ctx context.Context, req model.OrderRequest, pool *pool.CourierPool, tr *tracker.Tracker) error {
+func Assign(ctx context.Context, req model.OrderRequest, l Limiter, tr *tracker.Tracker) error {
 	tr.Inc()
 	defer tr.Dec()
 
 	delay := shared.DelayForStep(req.DelayMS, "courier", 100*time.Millisecond)
 
-	if err := pool.Acquire(ctx); err != nil {
+	if err := l.Acquire(ctx); err != nil {
 		return err
 	}
-	defer pool.Release()
+	defer l.Release()
 
 	if err := shared.SleepOrDone(ctx, delay); err != nil {
 		return err
