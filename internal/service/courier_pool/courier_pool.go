@@ -9,8 +9,13 @@ type CourierPool struct {
 
 // New creates a pool with at least one slot.
 func New(size int) *CourierPool {
+	// minimum courier pool size is 1
 	if size <= 0 {
 		size = 1
+	}
+	// maximum courier pool size is 128
+	if size > 128 {
+		size = 128
 	}
 	return &CourierPool{sem: make(chan struct{}, size)}
 }

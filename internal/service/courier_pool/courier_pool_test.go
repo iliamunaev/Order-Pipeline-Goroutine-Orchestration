@@ -2,44 +2,45 @@
 package courier_pool
 
 import (
-	"fmt"
 	"context"
+	"fmt"
 	"testing"
 	"time"
 )
 
-// BenchmarkCourierPoolParallel benchmarks the performance 
+// BenchmarkCourierPoolParallel benchmarks the performance
 // of the courier pool in parallel.
 func BenchmarkCourierPoolParallel(b *testing.B) {
 	// test pool with different capacities
-    for _, cap := range []int{1, 2, 8, 64} {
-        b.Run(fmt.Sprintf("cap=%d", cap), func(b *testing.B) {
-            p := New(cap)
-            ctx := context.Background()
-            b.ReportAllocs()
+	for _, cap := range []int{1, 2, 8, 64, 128} {
+		b.Run(fmt.Sprintf("cap=%d", cap), func(b *testing.B) {
+			p := New(cap)
+			ctx := context.Background()
+			b.ReportAllocs()
 			// run parallel tests
-            b.RunParallel(func(pb *testing.PB) {
-                for pb.Next() {
+			b.RunParallel(func(pb *testing.PB) {
+				for pb.Next() {
 					// acquire a courier
-                    if err := p.Acquire(ctx); err != nil {
-                        b.Fatal(err)
-                    }
+					if err := p.Acquire(ctx); err != nil {
+						b.Fatal(err)
+					}
 					// do some work for the courier
 					_ = 42 + 1337
 					// release the courier
-                    p.Release()
-                }
-            })
-        })
-    }
+					p.Release()
+				}
+			})
+		})
+	}
 }
 
 // FuzzCourierPoolAcquireRelease is a minimal fuzz test for pool acquire/release.
 func FuzzCourierPoolAcquireRelease(f *testing.F) {
 	f.Add(1)
 
+	// fuzz the pool size
 	f.Fuzz(func(t *testing.T, n int) {
-		if n < 1 {
+		if n <= 0 {
 			n = 1
 		}
 		if n > 128 {
@@ -58,33 +59,47 @@ func FuzzCourierPoolAcquireRelease(f *testing.F) {
 	})
 }
 
+// poolSizesTests is a table of test cases 
+// for the NewCourierPoolSize test.
+var poolSizesTests = []struct {
+	in  int
+	out int
+}{
+	// edge cases
+	{in: -1, out: 1},
+	{in: 0, out: 1},
+	{in: 128, out: 128},
+	{in: 129, out: 128},
+
+	// negative cases
+	{in: -3, out: 1},
+	{in: -129, out: 1},
+
+	// positive cases
+	{in: 1, out: 1},
+	{in: 3, out: 3},
+	{in: 127, out: 127},
+}
 
 // TestNewCourierPoolSize tests the size of the courier pool.
 func TestNewCourierPoolSize(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		size    int
-		want int
-	}{
-		{name: "defaults to size 1 for zero", size: 0, want: 1},
-		{name: "defaults to size 1 for negative", size: -3, want: 1},
-		{name: "uses provided size", size: 3, want: 3},
-	}
-
-	for _, tt := range tests {
+	for _, tt := range poolSizesTests {
 		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			pool := New(tt.size)
-			if got := cap(pool.sem); got != tt.want {
-				t.Fatalf("expected cap %d, got %d", tt.want, got)
+		t.Run(fmt.Sprintf("size=%d", tt.in), func(t *testing.T) {
+			pool := New(tt.in)
+			got := cap(pool.sem)
+			if got != tt.out {
+				t.Errorf("got %d, want %d", got, tt.out)
 			}
 		})
 	}
 }
+
+
+
+
+
+
 
 func TestCourierPoolAcquireRelease(t *testing.T) {
 	pool := New(1)
