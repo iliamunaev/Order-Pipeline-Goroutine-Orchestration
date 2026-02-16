@@ -65,20 +65,21 @@ var poolSizesTests = []struct {
 	in  int
 	out int
 }{
-	// edge cases
+	// below minimum
 	{in: -1, out: 1},
 	{in: 0, out: 1},
-	{in: 128, out: 128},
-	{in: 129, out: 128},
-
-	// negative cases
 	{in: -3, out: 1},
 	{in: -129, out: 1},
 
-	// positive cases
+	// within range
 	{in: 1, out: 1},
 	{in: 3, out: 3},
 	{in: 127, out: 127},
+	{in: 128, out: 128},
+
+	// above maximum
+	{in: 129, out: 128},
+	{in: 1000, out: 128},
 }
 
 // TestNewCourierPoolSize tests the size of the courier pool.
@@ -87,9 +88,12 @@ func TestNewCourierPoolSize(t *testing.T) {
 		tt := tt
 		t.Run(fmt.Sprintf("size=%d", tt.in), func(t *testing.T) {
 			pool := New(tt.in)
+			if pool == nil {
+				t.Fatalf("New(%d) returned nil", tt.in)
+			}
 			got := cap(pool.sem)
 			if got != tt.out {
-				t.Errorf("got %d, want %d", got, tt.out)
+				t.Errorf("New(%d): got %d, want %d", tt.in, got, tt.out)
 			}
 		})
 	}
