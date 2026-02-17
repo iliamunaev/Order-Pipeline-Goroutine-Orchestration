@@ -140,7 +140,7 @@ curl -i -X POST http://localhost:8080/order \
 make test-all
 ```
 
-### All, except benchmark
+### All, except benchmark, fuzzing
 ```bash
 make test
 ```
@@ -156,21 +156,20 @@ make test-fuzz
 ```
 
 ### Race detector
-
 ```bash
 make test-race
 ```
 
 ### Coverage:
 ```bash
-go test ./... -cover
+make test-cover
 ```
 
 ### Display coverage in a browser
 _Requirements: python3_
 ```bash
-go test ./... -coverprofile=coverage.out
-go tool cover -func=coverage.out
+make test-cover
+go tool cover -html=coverage.out -o coverage.html
 ```
 ```bash
 python3 -m http.server 8000
