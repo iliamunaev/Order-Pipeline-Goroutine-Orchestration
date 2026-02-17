@@ -9,7 +9,7 @@ import (
 
 	"order-pipeline/internal/apperr"
 	"order-pipeline/internal/model"
-	"order-pipeline/internal/service/shared"
+	shared "order-pipeline/internal/service/shared"
 	"order-pipeline/internal/service/tracker"
 )
 

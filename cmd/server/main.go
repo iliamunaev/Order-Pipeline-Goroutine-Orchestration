@@ -6,46 +6,44 @@ import (
 	"net/http"
 	"time"
 
-	apporder "order-pipeline/internal/app/order"
+	"order-pipeline/internal/app"
 	"order-pipeline/internal/handler"
-	cp "order-pipeline/internal/service/pool"
-	"order-pipeline/internal/service/tracker"
 )
 
-// main starts the HTTP server and listens on port 8080.
 func main() {
-	srv := newServer(":8080")
-	log.Printf("listening on %s", srv.Addr)
-
-	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	if err := run(); err != nil {
 		log.Fatal(err)
 	}
 }
 
-// newMux creates a new HTTP serve mux with the given handler.
-// It creates a new courier pool with 5 couriers and a new tracker.
-func newMux() *http.ServeMux {
+// Run initializes the application and handler,
+// creates a new HTTP server, and listens for requests.
+// Config is used to initialize the application and handler.
+// RequestTimeout is used to set the timeout for the HTTP server.
+// RequestTimeout is used to protect the server from hanging/slow downstream calls,
+// prevent goroutines/resources from being tied up too long,
+// give clients predictable failure instead of indefinite waiting,
+// and enable retries on client side.
+func run() error {
+	a := app.New(app.Config{Couriers: 5, RequestTimeout: 10 * time.Second})
+	h := handler.New(a.OrderService, a.RequestTimeout)
+
 	mux := http.NewServeMux()
-
-	pool := cp.New(5)
-	tr := &tracker.Tracker{}
-	orderSvc := apporder.New(pool, tr)
-	h := handler.New(orderSvc)
-
 	mux.HandleFunc("/order", h.HandleOrder)
-	return mux
-}
 
-// newServer creates a new HTTP server with the given address.
-// It sets the read, read header, write, and idle timeouts.
-func newServer(addr string) *http.Server {
-	return &http.Server{
-		Addr:    addr,
-		Handler: newMux(),
-
+	srv := &http.Server{
+		Addr:              ":8080",
+		Handler:           mux,
 		ReadTimeout:       10 * time.Second,
 		ReadHeaderTimeout: 3 * time.Second,
 		WriteTimeout:      10 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
+
+	log.Printf("listening on %s", srv.Addr)
+
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	return nil
 }

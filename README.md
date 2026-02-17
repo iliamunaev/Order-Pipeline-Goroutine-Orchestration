@@ -5,12 +5,13 @@ This project demonstrates how to orchestrate multiple concurrent steps in a safe
 Approach:
 - Structured concurrency with `errgroup.WithContext`
 - `Context` deadlines to cancel slow work
-- Bounded concurrency using a courier pool (`semaphore`)
+- Bounded concurrency using a pool (`semaphore`)
 - Thread‑safe result aggregation + lightweight tracking
 - Consistent `error mapping` to response status/kind
 
 ## Notes
-- The HTTP layer exists only to trigger the workflow; it is not the goal of the project.
+- The HTTP layer is intentionally thin: decode/validate request, call app orchestration, encode response.
+- Workflow orchestration lives in the app layer (`internal/app/order`).
 - The project (and tests) focus on goroutine orchestration, cancellation, error propagation, and concurrency invariants (pool/tracker behavior).
 ## Requirements
 
@@ -102,6 +103,10 @@ curl -i -X POST http://localhost:8080/order \
 ├── go.mod
 ├── go.sum
 ├── internal
+│   ├── app
+│   │   ├── app.go
+│   │   └── order
+│   │       └── order.go
 │   ├── apperr
 │   │   ├── apperr.go
 │   │   └── apperr_test.go
@@ -118,11 +123,10 @@ curl -i -X POST http://localhost:8080/order \
 │       │   ├── payment.go
 │       │   └── payment_test.go
 │       ├── pool
-│       │   ├── courier_pool.go
-│       │   └── courier_pool_test.go
+│       │   ├── pool.go
+│       │   └── pool_test.go
 │       ├── shared
-│       │   ├── delay.go
-│       │   └── sleep.go
+│       │   └── shared.go
 │       ├── tracker
 │       │   ├── tracker.go
 │       │   └── tracker_test.go
