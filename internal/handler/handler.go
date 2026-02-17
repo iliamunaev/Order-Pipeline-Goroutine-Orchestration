@@ -5,34 +5,22 @@ package handler
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
-	"sync"
 	"time"
 
-	"golang.org/x/sync/errgroup"
-
+	apporder "order-pipeline/internal/app/order"
 	"order-pipeline/internal/apperr"
 	"order-pipeline/internal/model"
-	"order-pipeline/internal/service/courier"
-	"order-pipeline/internal/service/payment"
-	"order-pipeline/internal/service/pool"
-	"order-pipeline/internal/service/tracker"
-	"order-pipeline/internal/service/vendor"
 )
 
-// Handler wires HTTP requests to order processing steps.
+// Handler wires HTTP requests to order orchestration.
 type Handler struct {
-	pool *pool.Pool
-	tr   *tracker.Tracker
+	orderSvc *apporder.Service
 }
 
-// New creates a Handler with the provided dependencies.
-func New(pool *pool.Pool, tr *tracker.Tracker) *Handler {
-	if tr == nil {
-		tr = &tracker.Tracker{}
-	}
-	return &Handler{pool: pool, tr: tr}
+// New creates a Handler with the provided order service.
+func New(orderSvc *apporder.Service) *Handler {
+	return &Handler{orderSvc: orderSvc}
 }
 
 // HandleOrder processes an order request.
@@ -70,59 +58,13 @@ func (h *Handler) HandleOrder(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
 
-	// create an error group with the context
-	g, ctx := errgroup.WithContext(ctx)
-
-	// create a map to store the results
-	results := make(map[string]model.StepResult, 3)
-	var mu sync.Mutex
-
-	// create a function to record the results
-	record := func(name string, fn func() error) func() error {
-		return func() error {
-			start := time.Now()
-			err := fn()
-			durMS := time.Since(start).Milliseconds() // calculate the duration of the step
-
-			st := "ok"
-			detail := ""
-
-			if err != nil {
-				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-					st = "canceled"
-				} else {
-					st = "error"
-					detail = apperr.Kind(err)
-				}
-			}
-
-			// store the results in the map
-			mu.Lock()
-			results[name] = model.StepResult{
-				Name:       name,
-				Status:     st,
-				DurationMS: durMS,
-				Detail:     detail,
-			}
-			mu.Unlock()
-
-			return err
-		}
-	}
-
-	// start the concurrent steps
-	// record the results of the steps
-	g.Go(record("payment", func() error { return payment.Process(ctx, req, h.tr) }))
-	g.Go(record("vendor", func() error { return vendor.Notify(ctx, req, h.tr) }))
-	g.Go(record("courier", func() error { return courier.Assign(ctx, req, h.pool, h.tr) }))
-
-	err := g.Wait()
+	steps, err := h.orderSvc.Process(ctx, req)
 
 	// create the response
 	resp := model.OrderResponse{
 		Status:  "ok",
 		OrderID: req.OrderID,
-		Steps:   flattenResults(results),
+		Steps:   steps,
 	}
 
 	// if there was an error, set the response to error
@@ -143,20 +85,4 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
-}
-
-// flattenResults returns a slice of step results in the order of
-// payment, vendor, and courier.
-func flattenResults(m map[string]model.StepResult) []model.StepResult {
-	out := make([]model.StepResult, 0, 3)
-	if r, ok := m["payment"]; ok {
-		out = append(out, r)
-	}
-	if r, ok := m["vendor"]; ok {
-		out = append(out, r)
-	}
-	if r, ok := m["courier"]; ok {
-		out = append(out, r)
-	}
-	return out
 }
