@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	apporder "order-pipeline/internal/app/order"
 	"order-pipeline/internal/handler"
 	cp "order-pipeline/internal/service/pool"
 	"order-pipeline/internal/service/tracker"
@@ -28,7 +29,8 @@ func newMux() *http.ServeMux {
 
 	pool := cp.New(5)
 	tr := &tracker.Tracker{}
-	h := handler.New(pool, tr)
+	orderSvc := apporder.New(pool, tr)
+	h := handler.New(orderSvc)
 
 	mux.HandleFunc("/order", h.HandleOrder)
 	return mux
