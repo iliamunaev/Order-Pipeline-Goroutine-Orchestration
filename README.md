@@ -92,20 +92,6 @@ curl -i -X POST http://localhost:8080/order \
 - `delay_ms` overrides per-step delays in milliseconds
 
 
-## Testing
-
-Run the full test suite:
-
-```bash
-go test ./...
-```
-
-Run with the race detector:
-
-```bash
-go test ./... -race
-```
-
 ## Project layout
 
 ```text
@@ -149,22 +135,50 @@ go test ./... -race
 
 ## Testing
 
-Run all tests:
+### All
 ```bash
 make test all
 ```
 
-Run test, except benchmark, and fuzz
+### All, except benchmark
 ```bash
 make test
 ```
 
-Run benchmark tests:
+### Benchmark test only
 ```bash
-make bench
+make test-bench
 ```
 
-Run fuzzing tests:
+### Fuzzing test only
 ```bash
-make fuzz
+make test-fuzz
 ```
+
+### Race detector
+
+```bash
+make test-race
+```
+
+### Coverage:
+```bash
+go test ./... -cover
+```
+
+### Display coverage in a browser
+_Requirements: python3_
+```bash
+go test ./... -coverprofile=coverage.out
+go tool cover -func=coverage.out
+```
+```bash
+python3 -m http.server 8000
+```
+Open in a browser:
+```bash
+http://localhost:8000/coverage.html
+```
+Example:
+
+############## Add images

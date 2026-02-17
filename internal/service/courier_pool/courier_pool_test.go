@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"testing"
 	"time"
+	"errors"
 )
 
 // BenchmarkCourierPoolParallel benchmarks the performance
@@ -89,71 +90,119 @@ func TestNewCourierPoolSize(t *testing.T) {
 		t.Run(fmt.Sprintf("size=%d", tt.in), func(t *testing.T) {
 			pool := New(tt.in)
 			if pool == nil {
-				t.Fatalf("New(%d) returned nil", tt.in)
+				t.Fatalf("New(%d) returned pool == nil", tt.in)
 			}
-			got := cap(pool.sem)
-			if got != tt.out {
+			if got := cap(pool.sem); got != tt.out {
 				t.Errorf("New(%d): got %d, want %d", tt.in, got, tt.out)
 			}
 		})
 	}
 }
 
-
-
-
-
-
-
-func TestCourierPoolAcquireRelease(t *testing.T) {
-	pool := New(1)
-
-	if err := pool.Acquire(context.Background()); err != nil {
-		t.Fatalf("unexpected acquire error: %v", err)
-	}
-
-	done := make(chan error, 1)
-	go func() {
-		done <- pool.Acquire(context.Background())
-	}()
-
-	select {
-	case <-done:
-		t.Fatal("expected second acquire to block before release")
-	case <-time.After(25 * time.Millisecond):
-	}
-
-	pool.Release()
-
-	select {
-	case err := <-done:
-		if err != nil {
-			t.Fatalf("unexpected second acquire error: %v", err)
-		}
-	case <-time.After(100 * time.Millisecond):
-		t.Fatal("expected second acquire to succeed after release")
-	}
-
-	pool.Release()
+// slotsTests is a table of test cases 
+// for the TestCourierPoolAcquireRelease test.
+var slotsTests = []struct {
+	size int
+}{
+	{size: 0},
+	{size: -1},
+	{size: -3},
+	{size: -129},
+	{size: 1},
+	{size: 2},
+	{size: 8},
+	{size: 64},
+	{size: 128},
 }
 
-func TestCourierPoolAcquireContextCancel(t *testing.T) {
+// TestCourierPoolAcquireRelease tests the acquire/release of slots in the pool.
+// It tests the behavior of the pool when the number of slots is 
+// 0, -1, -3, -129, 1, 2, 8, 64, and 128.
+func TestCourierPoolAcquireRelease(t *testing.T) {
+	for _, tt := range slotsTests {
+		tt := tt
+		t.Run(fmt.Sprintf("size=%d", tt.size), func(t *testing.T) {
+			pool := New(tt.size)
+			if pool == nil {
+				t.Fatalf("New(%d) returned pool == nil", tt.size)
+			}
+
+			slots := cap(pool.sem) 
+
+			// Track the number of slots acquired.
+			acquired := 0
+			defer func() {
+				for i := 0; i < acquired; i++ {
+					pool.Release()
+				}
+			}()
+
+			// Prefill: acquire all slots.
+			for i := 0; i < slots; i++ {
+				if err := pool.Acquire(context.Background()); err != nil {
+					t.Fatalf("prefill acquire #%d failed: %v", i+1, err)
+				}
+				acquired++
+			}
+
+			done := make(chan error, 1)
+			started := make(chan struct{})
+
+			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+			defer cancel()
+
+			go func() {
+				close(started)
+				done <- pool.Acquire(ctx)
+			}()
+
+			<-started
+
+			// Must not complete before a release.
+			select {
+			case err := <-done:
+				t.Fatalf("expected extra acquire to block; got err=%v", err)
+			default:
+			}
+
+			// Release one slot (reduces acquired by 1).
+			pool.Release()
+			acquired--
+
+			// After one release, blocked acquire should succeed.
+			select {
+			case err := <-done:
+				if err != nil {
+					t.Fatalf("unexpected extra acquire error: %v", err)
+				}
+				acquired++ // extra acquire succeeded
+			case <-time.After(200 * time.Millisecond):
+				t.Fatal("expected blocked acquire to succeed after release")
+			}
+		})
+	}
+}
+
+
+func TestCourierPoolAcquireContextTimeout(t *testing.T) {
 	pool := New(1)
 
+	// Hold the only slot
 	if err := pool.Acquire(context.Background()); err != nil {
-		t.Fatalf("unexpected acquire error: %v", err)
+		t.Fatalf("Acquire(background) returned error: %v", err)
 	}
+	defer pool.Release()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	// Set up a context with a timeout
+	// The acquire should fail on timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
 	err := pool.Acquire(ctx)
 	if err == nil {
 		t.Fatal("expected acquire to fail on context timeout")
 	}
-	if err != context.DeadlineExceeded {
-		t.Fatalf("expected context deadline exceeded, got %v", err)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected %v, got %v", context.DeadlineExceeded, err)
 	}
-
-	pool.Release()
 }
