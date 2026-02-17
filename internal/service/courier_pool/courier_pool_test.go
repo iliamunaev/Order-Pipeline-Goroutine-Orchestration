@@ -100,7 +100,8 @@ func TestNewCourierPoolSize(t *testing.T) {
 }
 
 // slotsTests is a table of test cases 
-// for the TestCourierPoolAcquireRelease test.
+// for the TestCourierPoolAcquireRelease test and
+// TestCourierPoolAcquireContextTimeout test.
 var slotsTests = []struct {
 	size int
 }{
@@ -137,7 +138,7 @@ func TestCourierPoolAcquireRelease(t *testing.T) {
 				}
 			}()
 
-			// Prefill: acquire all slots.
+			// Prefill: take all slots.
 			for i := 0; i < slots; i++ {
 				if err := pool.Acquire(context.Background()); err != nil {
 					t.Fatalf("prefill acquire #%d failed: %v", i+1, err)
@@ -183,26 +184,47 @@ func TestCourierPoolAcquireRelease(t *testing.T) {
 	}
 }
 
-
+// TestCourierPoolAcquireContextTimeout tests the acquire of slots in the pool with a context timeout.
+// It tests the behavior of the pool when the number of slots is 
+// 0, -1, -3, -129, 1, 2, 8, 64, and 128.
 func TestCourierPoolAcquireContextTimeout(t *testing.T) {
-	pool := New(1)
+	for _, tt := range slotsTests {
+		tt := tt
+		t.Run(fmt.Sprintf("size=%d", tt.size), func(t *testing.T) {
+			pool := New(tt.size)
+			if pool == nil {
+				t.Fatalf("New(%d) returned pool == nil", tt.size)
+			}
 
-	// Hold the only slot
-	if err := pool.Acquire(context.Background()); err != nil {
-		t.Fatalf("Acquire(background) returned error: %v", err)
-	}
-	defer pool.Release()
+			slots := cap(pool.sem)
 
-	// Set up a context with a timeout
-	// The acquire should fail on timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
+			// Track the number of slots acquired.
+			acquired := 0
+			defer func() {
+				for i := 0; i < acquired; i++ {
+					pool.Release()
+				}
+			}()
 
-	err := pool.Acquire(ctx)
-	if err == nil {
-		t.Fatal("expected acquire to fail on context timeout")
-	}
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("expected %v, got %v", context.DeadlineExceeded, err)
+			// Prefill: take all slots.
+			for i := 0; i < slots; i++ {
+				if err := pool.Acquire(context.Background()); err != nil {
+					t.Fatalf("prefill acquire #%d failed: %v", i+1, err)
+				}
+				acquired++
+			}
+
+			// Pool is full; next acquire must time out.
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			defer cancel()
+
+			err := pool.Acquire(ctx)
+			if err == nil {
+				t.Fatal("expected acquire to fail on context timeout")
+			}
+			if !errors.Is(err, context.DeadlineExceeded) {
+				t.Fatalf("expected %v, got %v", context.DeadlineExceeded, err)
+			}
+		})
 	}
 }

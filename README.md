@@ -137,7 +137,7 @@ curl -i -X POST http://localhost:8080/order \
 
 ### All
 ```bash
-make test all
+make test-all
 ```
 
 ### All, except benchmark

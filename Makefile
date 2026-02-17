@@ -1,6 +1,6 @@
 .PHONY: all test test-bench test-fuzz test-clean test-race
 
-all: test test-bench test-fuzz
+test-all: test test-bench test-fuzz
 
 test:
 	mkdir -p artifacts
