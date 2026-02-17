@@ -26,7 +26,7 @@ func main() {
 // and enable retries on client side.
 func run() error {
 	a := app.New(app.Config{Couriers: 5, RequestTimeout: 10 * time.Second})
-	h := handler.New(a.OrderService)
+	h := handler.New(a.OrderService, a.RequestTimeout)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/order", h.HandleOrder)
