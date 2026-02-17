@@ -15,8 +15,8 @@ import (
 	"order-pipeline/internal/apperr"
 	"order-pipeline/internal/model"
 	"order-pipeline/internal/service/courier"
-	"order-pipeline/internal/service/pool"
 	"order-pipeline/internal/service/payment"
+	"order-pipeline/internal/service/pool"
 	"order-pipeline/internal/service/tracker"
 	"order-pipeline/internal/service/vendor"
 )
