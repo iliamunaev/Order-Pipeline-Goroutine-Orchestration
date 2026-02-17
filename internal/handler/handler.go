@@ -88,7 +88,7 @@ func (h *Handler) HandleOrder(w http.ResponseWriter, r *http.Request) {
 		Status:  "ok",
 		OrderID: req.OrderID,
 		Steps:   steps,
-	}	
+	}
 
 	// if there was an error, set the response to error
 	if err != nil {

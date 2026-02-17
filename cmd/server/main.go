@@ -16,14 +16,13 @@ func main() {
 	}
 }
 
-
-// Run initializes the application and handler, 
+// Run initializes the application and handler,
 // creates a new HTTP server, and listens for requests.
 // Config is used to initialize the application and handler.
 // RequestTimeout is used to set the timeout for the HTTP server.
 // RequestTimeout is used to protect the server from hanging/slow downstream calls,
-// prevent goroutines/resources from being tied up too long, 
-// give clients predictable failure instead of indefinite waiting, 
+// prevent goroutines/resources from being tied up too long,
+// give clients predictable failure instead of indefinite waiting,
 // and enable retries on client side.
 func run() error {
 	a := app.New(app.Config{Couriers: 5, RequestTimeout: 10 * time.Second})

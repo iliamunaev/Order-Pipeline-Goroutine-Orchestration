@@ -27,7 +27,7 @@ func New(cfg Config) *App {
 	tr := &tracker.Tracker{}
 
 	return &App{
-		OrderService: order.New(p, tr),
+		OrderService:   order.New(p, tr),
 		RequestTimeout: cfg.RequestTimeout,
 	}
 }
