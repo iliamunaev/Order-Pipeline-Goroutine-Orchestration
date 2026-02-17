@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	apporder "order-pipeline/internal/app/order"
+	"order-pipeline/internal/app/order"
 	"order-pipeline/internal/model"
 	"order-pipeline/internal/service/pool"
 	"order-pipeline/internal/service/tracker"
@@ -21,8 +21,8 @@ import (
 func TestOrder_PaymentFailureCancelsOthers(t *testing.T) {
 	pool := pool.New(1)
 	tr := &tracker.Tracker{}
-	orderSvc := apporder.New(pool, tr)
-	h := New(orderSvc)
+	orderSvc := order.New(pool, tr)
+	h := New(orderSvc, 2*time.Second)
 
 	reqBody := model.OrderRequest{
 		OrderID:  "o-test",
@@ -92,8 +92,8 @@ func TestHandleOrderValidation(t *testing.T) {
 
 	pool := pool.New(1)
 	tr := &tracker.Tracker{}
-	orderSvc := apporder.New(pool, tr)
-	h := New(orderSvc)
+	orderProcessor := order.New(pool, tr)
+	h := New(orderProcessor, 2*time.Second)
 
 	tests := []struct {
 		name       string
@@ -160,10 +160,10 @@ func TestNewDefaultsTracker(t *testing.T) {
 	t.Parallel()
 
 	pool := pool.New(1)
-	orderSvc := apporder.New(pool, nil)
-	h := New(orderSvc)
-	if h.orderSvc == nil {
-		t.Fatal("expected order service to be initialized")
+	orderProcessor := order.New(pool, nil)
+	h := New(orderProcessor, 2*time.Second)
+	if h.orderProcessor == nil {
+		t.Fatal("expected orderProcessor to be initialized")
 	}
 }
 
@@ -194,8 +194,8 @@ func TestHandler_Stress(t *testing.T) {
 
 	pool := pool.New(4)
 	tr := &tracker.Tracker{}
-	orderSvc := apporder.New(pool, tr)
-	h := New(orderSvc)
+	orderSvc := order.New(pool, tr)
+	h := New(orderSvc, 2*time.Second)
 
 	const workers = 100    // number of workers
 	const iterations = 200 // number of iterations per worker

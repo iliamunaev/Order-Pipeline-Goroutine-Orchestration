@@ -5,22 +5,37 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"time"
 
-	apporder "order-pipeline/internal/app/order"
 	"order-pipeline/internal/apperr"
 	"order-pipeline/internal/model"
 )
 
+type orderProcessor interface {
+	Process(ctx context.Context, req model.OrderRequest) ([]model.StepResult, error)
+}
+
 // Handler wires HTTP requests to order orchestration.
 type Handler struct {
-	orderSvc *apporder.Service
+	orderProcessor orderProcessor
+	requestTimeout time.Duration
 }
 
 // New creates a Handler with the provided order service.
-func New(orderSvc *apporder.Service) *Handler {
-	return &Handler{orderSvc: orderSvc}
+func New(orderProcessor orderProcessor, requestTimeout time.Duration) *Handler {
+	if orderProcessor == nil {
+		panic("handler.New: nil order processor")
+	}
+	if requestTimeout <= 0 {
+		requestTimeout = 2 * time.Second
+	}
+	return &Handler{
+		orderProcessor: orderProcessor,
+		requestTimeout: requestTimeout,
+	}
 }
 
 // HandleOrder processes an order request.
@@ -43,6 +58,13 @@ func (h *Handler) HandleOrder(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	if err := dec.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		writeJSON(w, http.StatusBadRequest, model.OrderResponse{
+			Status: "error",
+			Error:  &model.ErrorPayload{Kind: "bad_request", Message: "invalid JSON"},
+		})
+		return
+	}
 
 	// validate the request
 	if req.OrderID == "" {
@@ -55,17 +77,18 @@ func (h *Handler) HandleOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// create a context with a timeout
-	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), h.requestTimeout)
 	defer cancel()
 
-	steps, err := h.orderSvc.Process(ctx, req)
+	// process the order
+	steps, err := h.orderProcessor.Process(ctx, req)
 
 	// create the response
 	resp := model.OrderResponse{
 		Status:  "ok",
 		OrderID: req.OrderID,
 		Steps:   steps,
-	}
+	}	
 
 	// if there was an error, set the response to error
 	if err != nil {

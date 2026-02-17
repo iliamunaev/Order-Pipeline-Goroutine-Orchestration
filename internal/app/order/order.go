@@ -14,6 +14,7 @@ import (
 	"order-pipeline/internal/service/courier"
 	"order-pipeline/internal/service/payment"
 	"order-pipeline/internal/service/pool"
+	shared "order-pipeline/internal/service/shared"
 	"order-pipeline/internal/service/tracker"
 	"order-pipeline/internal/service/vendor"
 )
@@ -22,6 +23,17 @@ import (
 type Service struct {
 	pool *pool.Pool
 	tr   *tracker.Tracker
+	vs   vendor.Helper
+}
+
+type defaultVendorService struct{}
+
+func (defaultVendorService) DelayForStep(delayMS map[string]int64, step string, defaultMS time.Duration) time.Duration {
+	return shared.DelayForStep(delayMS, step, defaultMS)
+}
+
+func (defaultVendorService) SleepOrDone(ctx context.Context, delay time.Duration) error {
+	return shared.SleepOrDone(ctx, delay)
 }
 
 // New creates an orchestration service with dependencies.
@@ -29,7 +41,11 @@ func New(pool *pool.Pool, tr *tracker.Tracker) *Service {
 	if tr == nil {
 		tr = &tracker.Tracker{}
 	}
-	return &Service{pool: pool, tr: tr}
+	return &Service{
+		pool: pool,
+		tr:   tr,
+		vs:   defaultVendorService{},
+	}
 }
 
 // Process runs payment, vendor, and courier steps concurrently and returns step results.
@@ -70,7 +86,7 @@ func (s *Service) Process(ctx context.Context, req model.OrderRequest) ([]model.
 	}
 
 	g.Go(record("payment", func() error { return payment.Process(ctx, req, s.tr) }))
-	g.Go(record("vendor", func() error { return vendor.Notify(ctx, req, s.tr) }))
+	g.Go(record("vendor", func() error { return vendor.Notify(ctx, req, s.tr, s.vs) }))
 	g.Go(record("courier", func() error { return courier.Assign(ctx, req, s.pool, s.tr) }))
 
 	err := g.Wait()
