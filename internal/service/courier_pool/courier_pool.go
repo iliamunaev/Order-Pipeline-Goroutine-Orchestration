@@ -21,11 +21,11 @@ func New(size int) *CourierPool {
 }
 
 // Acquire books a slot in the pool.
-// It blocks until a slot is available or 
+// It blocks until a slot is available or
 // the context is canceled, whichever happens first.
 func (p *CourierPool) Acquire(ctx context.Context) error {
 	select {
-	case p.sem <- struct{}{}: 
+	case p.sem <- struct{}{}:
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()

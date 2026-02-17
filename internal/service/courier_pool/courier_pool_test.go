@@ -3,10 +3,10 @@ package courier_pool
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
-	"errors"
 )
 
 // BenchmarkCourierPoolParallel benchmarks the performance
@@ -60,7 +60,7 @@ func FuzzCourierPoolAcquireRelease(f *testing.F) {
 	})
 }
 
-// poolSizesTests is a table of test cases 
+// poolSizesTests is a table of test cases
 // for the NewCourierPoolSize test.
 var poolSizesTests = []struct {
 	in  int
@@ -99,7 +99,7 @@ func TestNewCourierPoolSize(t *testing.T) {
 	}
 }
 
-// slotsTests is a table of test cases 
+// slotsTests is a table of test cases
 // for the TestCourierPoolAcquireRelease test and
 // TestCourierPoolAcquireContextTimeout test.
 var slotsTests = []struct {
@@ -117,7 +117,7 @@ var slotsTests = []struct {
 }
 
 // TestCourierPoolAcquireRelease tests the acquire/release of slots in the pool.
-// It tests the behavior of the pool when the number of slots is 
+// It tests the behavior of the pool when the number of slots is
 // 0, -1, -3, -129, 1, 2, 8, 64, and 128.
 func TestCourierPoolAcquireRelease(t *testing.T) {
 	for _, tt := range slotsTests {
@@ -128,7 +128,7 @@ func TestCourierPoolAcquireRelease(t *testing.T) {
 				t.Fatalf("New(%d) returned pool == nil", tt.size)
 			}
 
-			slots := cap(pool.sem) 
+			slots := cap(pool.sem)
 
 			// Track the number of slots acquired.
 			acquired := 0
@@ -185,7 +185,7 @@ func TestCourierPoolAcquireRelease(t *testing.T) {
 }
 
 // TestCourierPoolAcquireContextTimeout tests the acquire of slots in the pool with a context timeout.
-// It tests the behavior of the pool when the number of slots is 
+// It tests the behavior of the pool when the number of slots is
 // 0, -1, -3, -129, 1, 2, 8, 64, and 128.
 func TestCourierPoolAcquireContextTimeout(t *testing.T) {
 	for _, tt := range slotsTests {
