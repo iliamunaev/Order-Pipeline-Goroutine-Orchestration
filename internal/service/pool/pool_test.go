@@ -1,5 +1,5 @@
-// courier_pool_test.go
-package courier_pool
+// pool_test.go
+package pool
 
 import (
 	"context"
@@ -9,9 +9,9 @@ import (
 	"time"
 )
 
-// BenchmarkCourierPoolParallel benchmarks the performance
-// of the courier pool in parallel.
-func BenchmarkCourierPoolParallel(b *testing.B) {
+// BenchmarkCourierParallel benchmarks the performance
+// of the pool in parallel.
+func BenchmarkPoolParallel(b *testing.B) {
 	// test pool with different capacities
 	for _, cap := range []int{1, 2, 8, 64, 128} {
 		b.Run(fmt.Sprintf("cap=%d", cap), func(b *testing.B) {
@@ -35,8 +35,8 @@ func BenchmarkCourierPoolParallel(b *testing.B) {
 	}
 }
 
-// FuzzCourierPoolAcquireRelease is a minimal fuzz test for pool acquire/release.
-func FuzzCourierPoolAcquireRelease(f *testing.F) {
+// FuzzPoolAcquireRelease is a minimal fuzz test for pool acquire/release.
+func FuzzPoolAcquireRelease(f *testing.F) {
 	f.Add(1)
 
 	// fuzz the pool size
@@ -61,7 +61,7 @@ func FuzzCourierPoolAcquireRelease(f *testing.F) {
 }
 
 // poolSizesTests is a table of test cases
-// for the NewCourierPoolSize test.
+// for the NewPoolSize test.
 var poolSizesTests = []struct {
 	in  int
 	out int
@@ -83,8 +83,8 @@ var poolSizesTests = []struct {
 	{in: 1000, out: 128},
 }
 
-// TestNewCourierPoolSize tests the size of the courier pool.
-func TestNewCourierPoolSize(t *testing.T) {
+// TestNewPoolSize tests the size of the pool.
+func TestNewPoolSize(t *testing.T) {
 	for _, tt := range poolSizesTests {
 		tt := tt
 		t.Run(fmt.Sprintf("size=%d", tt.in), func(t *testing.T) {
@@ -100,8 +100,8 @@ func TestNewCourierPoolSize(t *testing.T) {
 }
 
 // slotsTests is a table of test cases
-// for the TestCourierPoolAcquireRelease test and
-// TestCourierPoolAcquireContextTimeout test.
+// for the TestPoolAcquireRelease test and
+// TestPoolAcquireContextTimeout test.
 var slotsTests = []struct {
 	size int
 }{
@@ -116,10 +116,10 @@ var slotsTests = []struct {
 	{size: 128},
 }
 
-// TestCourierPoolAcquireRelease tests the acquire/release of slots in the pool.
+// TestPoolAcquireRelease tests the acquire/release of slots in the pool.
 // It tests the behavior of the pool when the number of slots is
 // 0, -1, -3, -129, 1, 2, 8, 64, and 128.
-func TestCourierPoolAcquireRelease(t *testing.T) {
+func TestPoolAcquireRelease(t *testing.T) {
 	for _, tt := range slotsTests {
 		tt := tt
 		t.Run(fmt.Sprintf("size=%d", tt.size), func(t *testing.T) {
@@ -166,7 +166,7 @@ func TestCourierPoolAcquireRelease(t *testing.T) {
 			default:
 			}
 
-			// Release one slot (reduces acquired by 1).
+			// Release one slot.
 			pool.Release()
 			acquired--
 
@@ -184,10 +184,10 @@ func TestCourierPoolAcquireRelease(t *testing.T) {
 	}
 }
 
-// TestCourierPoolAcquireContextTimeout tests the acquire of slots in the pool with a context timeout.
+// TestPoolAcquireContextTimeout tests the acquire of slots in the pool with a context timeout.
 // It tests the behavior of the pool when the number of slots is
 // 0, -1, -3, -129, 1, 2, 8, 64, and 128.
-func TestCourierPoolAcquireContextTimeout(t *testing.T) {
+func TestPoolAcquireContextTimeout(t *testing.T) {
 	for _, tt := range slotsTests {
 		tt := tt
 		t.Run(fmt.Sprintf("size=%d", tt.size), func(t *testing.T) {

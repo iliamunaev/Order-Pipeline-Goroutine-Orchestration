@@ -12,7 +12,7 @@ test-bench:
 	go test ./... -run=^$$ -bench=. -benchmem -cpu=1,2,4,8 -count=1
 
 test-fuzz:
-	go test ./internal/service/courier_pool -run=^$$ -fuzz=FuzzCourierPoolAcquireRelease -fuzztime=10s -count=1
+	go test ./internal/service/pool -run=^$$ -fuzz=FuzzPoolAcquireRelease -fuzztime=10s -count=1
 
 
 test-cover:
