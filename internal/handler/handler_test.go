@@ -11,16 +11,16 @@ import (
 	"time"
 
 	"order-pipeline/internal/model"
-	"order-pipeline/internal/service/courier_pool"
+	"order-pipeline/internal/service/pool"
 	"order-pipeline/internal/service/tracker"
 )
 
 // TestOrder_PaymentFailureCancelsOthers tests that when payment fails,
 // the other steps are canceled.
 func TestOrder_PaymentFailureCancelsOthers(t *testing.T) {
-	courierPool := courier_pool.New(1)
+	pool := pool.New(1)
 	tr := &tracker.Tracker{}
-	h := New(courierPool, tr)
+	h := New(pool, tr)
 
 	reqBody := model.OrderRequest{
 		OrderID:  "o-test",
@@ -88,9 +88,9 @@ func TestOrder_PaymentFailureCancelsOthers(t *testing.T) {
 func TestHandleOrderValidation(t *testing.T) {
 	t.Parallel()
 
-	courierPool := courier_pool.New(1)
+	pool := pool.New(1)
 	tr := &tracker.Tracker{}
-	h := New(courierPool, tr)
+	h := New(pool, tr)
 
 	tests := []struct {
 		name       string
@@ -156,8 +156,8 @@ func TestHandleOrderValidation(t *testing.T) {
 func TestNewDefaultsTracker(t *testing.T) {
 	t.Parallel()
 
-	courierPool := courier_pool.New(1)
-	h := New(courierPool, nil)
+	pool := pool.New(1)
+	h := New(pool, nil)
 	if h.tr == nil {
 		t.Fatal("expected tracker to be initialized")
 	}
@@ -188,9 +188,9 @@ func TestHandler_Stress(t *testing.T) {
 		t.Skip("skipping stress test in short mode")
 	}
 
-	courierPool := courier_pool.New(4)
+	pool := pool.New(4)
 	tr := &tracker.Tracker{}
-	h := New(courierPool, tr)
+	h := New(pool, tr)
 
 	const workers = 100    // number of workers
 	const iterations = 200 // number of iterations per worker

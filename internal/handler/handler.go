@@ -15,7 +15,7 @@ import (
 	"order-pipeline/internal/apperr"
 	"order-pipeline/internal/model"
 	"order-pipeline/internal/service/courier"
-	"order-pipeline/internal/service/courier_pool"
+	"order-pipeline/internal/service/pool"
 	"order-pipeline/internal/service/payment"
 	"order-pipeline/internal/service/tracker"
 	"order-pipeline/internal/service/vendor"
@@ -23,12 +23,12 @@ import (
 
 // Handler wires HTTP requests to order processing steps.
 type Handler struct {
-	pool *courier_pool.CourierPool
+	pool *pool.Pool
 	tr   *tracker.Tracker
 }
 
 // New creates a Handler with the provided dependencies.
-func New(pool *courier_pool.CourierPool, tr *tracker.Tracker) *Handler {
+func New(pool *pool.Pool, tr *tracker.Tracker) *Handler {
 	if tr == nil {
 		tr = &tracker.Tracker{}
 	}
