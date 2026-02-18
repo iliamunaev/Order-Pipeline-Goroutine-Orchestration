@@ -27,6 +27,6 @@ type StepResult struct {
 
 // ErrorPayload describes an error in the response.
 type ErrorPayload struct {
-	Kind    string `json:"kind"`              // "payment_declined", "timeout", etc.
+	Kind    string `json:"kind"` // "payment_declined", "timeout", etc.
 	Message string `json:"message,omitempty"`
 }
