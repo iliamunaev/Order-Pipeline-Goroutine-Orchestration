@@ -17,10 +17,12 @@ thorough testing.
 - **Context propagation** — request timeouts flow through every goroutine;
   all blocking operations (`sleep`, `pool.Acquire`) respect `ctx.Done()`.
 - **Interface-driven design** — the HTTP handler depends on an `orderProcessor`
-  interface, not concrete types. Services own their error semantics via the
-  `AppError` interface (structural typing, no coupling).
-- **Layered architecture** — transport (HTTP) / orchestration (order) / domain services
-  are cleanly separated. Dependencies point inward.
+  interface, not concrete types. Services carry error semantics via structural
+  typing (`Kind() string`) — no shared error package needed.
+- **Injected pipeline steps** — `order.Service` receives `[]order.Step` at
+  construction, keeping the orchestrator decoupled from concrete services.
+- **Layered architecture** — transport (HTTP) / orchestration (order) / domain
+  services are cleanly separated. Dependencies point inward.
 - **Testing at every level** — unit tests with stubs, integration tests with
   real services, table-driven tests, stress tests (20k concurrent requests),
   race detection, benchmarks, and fuzz testing.
@@ -117,15 +119,12 @@ curl -i -X POST http://localhost:8080/order \
 .
 ├── cmd
 │   └── server
-│       └── main.go                  composition root — wires services, starts server
+│       └── main.go                  composition root — wires steps, starts server
 ├── internal
-│   ├── apperr
-│   │   ├── apperr.go                AppError interface + Kind/HTTPStatus extractors
-│   │   └── apperr_test.go
 │   ├── model
 │   │   └── order.go                 request / response DTOs
 │   ├── order
-│   │   └── order.go                 orchestration — errgroup, record, flattenResults
+│   │   └── order.go                 orchestration — Step type, errgroup, deterministic results
 │   ├── service
 │   │   ├── courier
 │   │   │   ├── courier.go           courier assignment with bounded concurrency
@@ -146,8 +145,12 @@ curl -i -X POST http://localhost:8080/order \
 │   │       └── vendor_test.go
 │   └── transport
 │       └── http
+│           ├── errors.go            error-kind extraction + HTTP status mapping
 │           ├── handler.go           HTTP handler — validate, delegate, respond
 │           └── handler_test.go      unit + integration + stress tests
+├── .github
+│   └── workflows
+│       └── go.yml                   CI pipeline (fmt → lint → test → race → fuzz)
 ├── go.mod
 ├── go.sum
 ├── Makefile
@@ -155,19 +158,24 @@ curl -i -X POST http://localhost:8080/order \
 └── README.md
 ```
 
-## Dependancy layout
+## Dependency layout
 
-```bash
+```
 main.go
  ├── model
- ├── order         → model
- ├── httptransport → model
- ├── payment       → model, shared, tracker
- ├── vendor        → model, shared, tracker
- ├── courier       → model, shared, tracker
- ├── pool          → (stdlib only)
- └── tracker       → (stdlib only)
- ```
+ ├── order          → model
+ ├── httptransport  → model
+ ├── payment        → model, shared, tracker
+ ├── vendor         → model, shared, tracker
+ ├── courier        → model, shared, tracker
+ ├── pool           → (stdlib only)
+ └── tracker        → (stdlib only)
+```
+
+Dependencies point inward. The transport layer has zero imports of service
+packages — it uses the `orderProcessor` interface. The order package has zero
+imports of service packages — steps are injected via `[]order.Step`.
+
 ## Testing
 
 ```bash
@@ -176,7 +184,8 @@ make test-race       # with race detector
 make test-bench      # benchmarks (pool throughput at various capacities)
 make test-fuzz       # fuzz pool acquire/release (10s)
 make test-cover      # coverage report
-make test-vet        # static analysis
+make vet             # static analysis (go vet)
+make lint            # golangci-lint
 make test-all        # test + race + bench + fuzz
 ```
 
@@ -185,14 +194,15 @@ make test-all        # test + race + bench + fuzz
 | Layer          | What is tested                                             | Approach               |
 |----------------|------------------------------------------------------------|------------------------|
 | Handler        | HTTP method, JSON validation, error mapping, success path  | Stub-based unit tests  |
+| Handler        | Error kind extraction + HTTP status mapping                | Table-driven           |
 | Handler        | Payment failure cancels vendor + courier                   | Integration test       |
 | Handler        | 20,000 concurrent requests with mixed outcomes             | Stress test            |
 | Payment        | Success, decline, invalid amount                           | Table-driven           |
 | Vendor         | Success, unavailable                                       | Table-driven           |
 | Courier        | Success, failure, context timeout                          | Table-driven           |
 | Pool           | Size clamping, acquire/release, blocking, timeout          | Table-driven + fuzz    |
+| Pool           | Throughput at 1/2/8/64/128 capacity                        | Parallel benchmark     |
 | Tracker        | Inc/dec correctness, concurrent safety                     | Parallel goroutines    |
-| apperr         | Kind + HTTP status for every error type, wrapped errors    | Table-driven           |
 
 ### Coverage
 
@@ -219,9 +229,24 @@ python3 -m http.server 8000
 | `context.Canceled`             | `canceled`           | 408    |
 | unknown                        | `internal`           | 500    |
 
-Each service defines a typed sentinel error implementing `apperr.AppError`.
-The `apperr` package uses `errors.As` to extract kind and status from any
-error chain — it has zero knowledge of service packages.
+Each service defines a typed sentinel error with a `Kind() string` method
+(structural typing). The transport layer's `errors.go` uses `errors.As` to
+extract the kind from any error chain and maps it to an HTTP status via
+`kindToStatus` — it has zero knowledge of service packages.
+
+## CI
+
+GitHub Actions pipeline (`.github/workflows/go.yml`) runs on every push
+and pull request to `master`:
+
+1. **fmt** — verifies `gofmt` formatting
+2. **lint** — runs `golangci-lint`
+3. **test** — builds and runs unit tests
+4. **race** — runs tests with `-race`
+5. **fuzz** — 10-second fuzz smoke test on pool
+
+Jobs are sequenced: fmt → lint → test → (race + fuzz in parallel).
+`concurrency` cancels stale runs on the same branch.
 
 ## Architecture notes
 

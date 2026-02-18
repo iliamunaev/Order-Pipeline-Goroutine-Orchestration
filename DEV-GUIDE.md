@@ -4,8 +4,7 @@ Concurrent order-processing HTTP service in Go. Receives an order, runs
 payment / vendor-notification / courier-assignment steps in parallel, and
 returns a unified response with per-step outcomes.
 
-External dependencies:
-- `golang.org/x/sync` (errgroup).
+External dependency: `golang.org/x/sync` (errgroup).
 
 ---
 
@@ -15,15 +14,12 @@ External dependencies:
 .
 ├── cmd
 │   └── server
-│       └── main.go                  composition root — wires services, starts HTTP server
+│       └── main.go                  composition root — wires steps, starts HTTP server
 ├── internal
-│   ├── apperr
-│   │   ├── apperr.go                AppError interface + Kind/HTTPStatus extractors
-│   │   └── apperr_test.go
 │   ├── model
 │   │   └── order.go                 request / response DTOs
 │   ├── order
-│   │   └── order.go                 orchestration — runs steps concurrently via errgroup
+│   │   └── order.go                 orchestration — Step type, errgroup, deterministic results
 │   ├── service
 │   │   ├── courier
 │   │   │   ├── courier.go           courier step — bounded-concurrency assignment
@@ -44,8 +40,12 @@ External dependencies:
 │   │       └── vendor_test.go
 │   └── transport
 │       └── http
+│           ├── errors.go            error-kind extraction + HTTP status mapping
 │           ├── handler.go           HTTP handler — decode, validate, delegate, respond
-│           └── handler_test.go      unit tests (stub) + integration tests (real services)
+│           └── handler_test.go      unit tests (stub) + integration + stress tests
+├── .github
+│   └── workflows
+│       └── go.yml                   CI pipeline (fmt → lint → test → race → fuzz)
 ├── go.mod
 ├── go.sum
 ├── Makefile
@@ -56,17 +56,25 @@ External dependencies:
 ### Dependency flow
 
 ```
-main  ──>  order  ──>  payment
-       │          ├──>  vendor
-       │          ├──>  courier ──> pool (limiter interface)
-       │          ├──>  tracker
-       │          └──>  apperr
-       └──>  transport/http ──> apperr
+main.go
+ ├── model
+ ├── order          → model
+ ├── httptransport  → model
+ ├── payment        → model, shared, tracker
+ ├── vendor         → model, shared, tracker
+ ├── courier        → model, shared, tracker
+ ├── pool           → (stdlib only)
+ └── tracker        → (stdlib only)
 ```
 
-Key rule: dependencies point inward. The transport layer knows nothing about
-concrete services — it depends on the `orderProcessor` interface defined in
-`handler.go`. Services know nothing about HTTP.
+Key rules:
+- Dependencies point inward. The transport layer knows nothing about
+  concrete services — it depends on the `orderProcessor` interface defined
+  in `handler.go`.
+- The order package knows nothing about concrete services — steps are
+  injected as `[]order.Step` values from `main.go`.
+- Services know nothing about HTTP.
+- `main.go` (composition root) is the only file that imports all concrete types.
 
 ---
 
@@ -77,32 +85,23 @@ concrete services — it depends on the `orderProcessor` interface defined in
 1. `HandleOrder` validates method (POST only) and JSON body (single object,
    no unknown fields, `order_id` required).
 2. A `context.WithTimeout` wraps the request context with `requestTimeout`.
-3. `order.Service.Process` launches three goroutines via `errgroup`:
+3. `order.Service.Process` launches goroutines via `errgroup` — one per
+   injected `Step`.
+4. Each step runs concurrently:
    - `payment.Process` — sleep, then check `FailStep` / amount.
    - `vendor.Notify` — sleep, then check `FailStep`.
    - `courier.Assign` — acquire pool slot, sleep, then check `FailStep`.
-4. When any step fails, errgroup cancels the derived context, which cancels
+5. When any step fails, errgroup cancels the derived context, which cancels
    the other in-flight steps.
-5. `record` wraps each step to capture timing, status (`ok` / `error` /
-   `canceled`), and error kind.
-6. `flattenResults` returns steps in deterministic order (payment → vendor →
-   courier) regardless of completion order.
-7. The handler maps the first pipeline error to an HTTP status via
-   `apperr.HTTPStatus` and writes a JSON response.
+6. Each step's outcome (timing, status, error kind) is recorded in a
+   mutex-protected map keyed by step name.
+7. After `g.Wait()`, results are flattened to a slice in registration order
+   (payment → vendor → courier), producing deterministic output regardless
+   of goroutine completion order.
+8. The handler maps the pipeline error to an HTTP status via `errors.go`
+   and writes a JSON response.
 
 ### Concurrency model
-
-```
-          errgroup (cancel-on-first-error)
-         ┌──────────────────────────────────┐
-         │                                  │
-    ┌────┴────┐    ┌──────────┐    ┌───────┴───────┐
-    │ payment │    │  vendor  │    │    courier    │
-    └─────────┘    └──────────┘    │  pool.Acquire │
-                                   │  ... work ... │
-                                   │  pool.Release │
-                                   └───────────────┘
-```
 
 - **errgroup** — structured concurrency with shared context. One failure
   cancels sibling goroutines.
@@ -116,20 +115,32 @@ concrete services — it depends on the `orderProcessor` interface defined in
 
 ### Error handling
 
-Services define typed sentinel errors that implement `apperr.AppError`:
+Services define typed sentinel errors that implement a `Kind() string` method
+via structural typing:
 
 ```go
-type AppError interface {
-    error
-    Kind() string      // "payment_declined", "no_courier", ...
-    HTTPStatus() int   // 400, 503, ...
+type noCourierError struct{}
+
+func (noCourierError) Error() string { return "no courier available" }
+func (noCourierError) Kind() string  { return "no_courier" }
+```
+
+There is no shared error interface package. Both the `order` package and the
+`transport/http` package define their own local `kinder` interface:
+
+```go
+type kinder interface {
+    Kind() string
 }
 ```
 
-Each service owns its error semantics — no central switch. `apperr.Kind` and
-`apperr.HTTPStatus` use `errors.As` to find the first `AppError` in a
-wrapped chain, with fallbacks for `context.DeadlineExceeded` (→ 504) and
-`context.Canceled` (→ 408).
+This is idiomatic Go — "accept interfaces at the consumer." Each package
+discovers error kinds independently via `errors.As`, with zero coupling
+to service packages.
+
+The transport layer's `errors.go` maps kinds to HTTP statuses using a simple
+`kindToStatus` map, with fallbacks for `context.DeadlineExceeded` (→ 504)
+and `context.Canceled` (→ 408).
 
 | Sentinel                       | Kind                 | HTTP status |
 |--------------------------------|----------------------|-------------|
@@ -139,6 +150,37 @@ wrapped chain, with fallbacks for `context.DeadlineExceeded` (→ 504) and
 | `context.DeadlineExceeded`     | `timeout`            | 504         |
 | `context.Canceled`             | `canceled`           | 408         |
 | anything else                  | `internal`           | 500         |
+
+### Step injection
+
+The `order` package defines a `Step` struct:
+
+```go
+type Step struct {
+    Name string
+    Run  func(ctx context.Context, req model.OrderRequest) error
+}
+```
+
+`main.go` constructs steps as closures that adapt service functions to this
+signature, injecting shared dependencies (pool, tracker):
+
+```go
+steps := []order.Step{
+    {Name: "payment", Run: func(ctx context.Context, req model.OrderRequest) error {
+        return payment.Process(ctx, req, tr)
+    }},
+    {Name: "vendor", Run: func(ctx context.Context, req model.OrderRequest) error {
+        return vendor.Notify(ctx, req, tr)
+    }},
+    {Name: "courier", Run: func(ctx context.Context, req model.OrderRequest) error {
+        return courier.Assign(ctx, req, p, tr)
+    }},
+}
+```
+
+This keeps the orchestrator fully decoupled from service packages — it only
+knows about `model.OrderRequest` and the `Step` contract.
 
 ---
 
@@ -230,7 +272,8 @@ make test-race       # with -race
 make test-bench      # benchmarks (pool throughput at various capacities)
 make test-fuzz       # fuzz pool acquire/release for 10s
 make test-cover      # coverage report
-make test-vet        # go vet
+make vet             # go vet
+make lint            # golangci-lint
 make test-all        # test + test-race + test-bench + test-fuzz
 ```
 
@@ -239,6 +282,9 @@ make test-all        # test + test-race + test-bench + test-fuzz
 - **Unit tests (stub-based)** — `handler_test.go` uses a `stubProcessor` to
   test HTTP validation, success responses, and error mapping in isolation
   from real services.
+- **Error classification tests** — `handler_test.go` verifies `errorKind()`
+  and `httpStatus()` for every sentinel error, wrapped errors, context
+  errors, and unknown errors via table-driven tests.
 - **Integration tests** — `TestOrder_PaymentFailureCancelsOthers` exercises
   the full pipeline through real services and verifies cancellation
   propagation.
@@ -247,33 +293,65 @@ make test-all        # test + test-race + test-bench + test-fuzz
   correctness under concurrency. Skipped with `-short`.
 - **Service tests** — each service package has table-driven tests for success
   and failure paths.
+- **Courier timeout test** — `TestAssignContextTimeout` verifies that a
+  blocked pool acquire returns `context.DeadlineExceeded` when the context
+  expires.
 - **Pool tests** — size clamping, acquire/release blocking semantics, context
-  timeout, parallel benchmark, fuzz test.
-- **Tracker tests** — basic inc/dec, concurrent safety.
-- **apperr tests** — kind and HTTP status extraction for every error type,
-  including wrapped errors.
+  timeout, parallel benchmark at 1/2/8/64/128 capacity, fuzz test.
+- **Tracker tests** — basic inc/dec, concurrent safety with 10 goroutines ×
+  100 iterations.
+
+### CI
+
+GitHub Actions (`.github/workflows/go.yml`) runs sequentially:
+
+1. **fmt** — `gofmt -l .` (rejects unformatted files)
+2. **lint** — `golangci-lint` with 5-minute timeout
+3. **test** — `go build ./...` + `make test`
+4. **race** — `make test-race` (parallel with fuzz)
+5. **fuzz** — `make test-fuzz` 10-second smoke (parallel with race)
+
+`concurrency` with `cancel-in-progress: true` cancels stale runs on the
+same branch.
 
 ---
 
 ## Design decisions
 
-**Why errgroup, not raw goroutines?** — errgroup gives cancel-on-first-error
+**Errgroup, not raw goroutines** — errgroup gives cancel-on-first-error
 for free. The derived context automatically propagates cancellation to
 sibling steps, so a payment decline immediately stops vendor and courier work
 instead of wasting resources.
 
-**Why a channel semaphore instead of `semaphore.Weighted`?** — The channel
+**A channel semaphore instead of `semaphore.Weighted`** — The channel
 approach is zero-allocation on the hot path (send/receive on a buffered
 channel) and integrates naturally with `select` + `ctx.Done()`. For this
 use case (bounded integer slots, no weighted acquisition) it's simpler and
 faster than `semaphore.Weighted`.
 
-**Why typed error sentinels instead of `errors.New`?** — Each service's error
-type implements `apperr.AppError` (via structural typing — no import needed).
-This means `apperr` has zero knowledge of service packages. Adding a new
-service with new error kinds requires no changes to `apperr`.
+**Typed error sentinels with `Kind()` instead of `errors.New`** — Each
+service's error type carries a `Kind() string` method via structural typing.
+The transport layer and the order package each define their own local `kinder`
+interface to extract the kind via `errors.As`. This means adding a new service
+with a new error kind requires zero changes to the handler or orchestrator.
 
-**Why `DisallowUnknownFields` + double decode?** — `DisallowUnknownFields`
+**No shared error interface package** — The original design had an
+`apperr` package with `HTTPStatus()` on domain errors, which leaked HTTP
+concerns into the domain layer. The current design keeps error classification
+(kind → HTTP status) entirely in `transport/http/errors.go` where it belongs.
+Domain errors only carry `Kind()` — they have no knowledge of HTTP.
+
+**`Step` struct instead of an interface** — A `Step` struct with `Name`
+and `Run` fields is simpler and more flexible than a multi-method interface.
+Any function with the right signature becomes a step — no adapter types needed.
+The composition root builds steps as closures, naturally capturing dependencies.
+
+**`DisallowUnknownFields` + double decode** — `DisallowUnknownFields`
 rejects payloads with typos or extra fields early. The second `Decode` call
 ensures the body contains exactly one JSON value (rejects concatenated
 objects like `{...}{...}`).
+
+**`WriteTimeout = requestTimeout + 5s`** — The pipeline has up to
+`requestTimeout` to complete. `WriteTimeout` must be strictly larger to
+allow the handler to write the response after the pipeline finishes or
+times out. The 5-second buffer accounts for JSON encoding and I/O.
