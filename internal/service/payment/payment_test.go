@@ -5,7 +5,6 @@ import (
 	"errors"
 	"testing"
 
-	"order-pipeline/internal/apperr"
 	"order-pipeline/internal/model"
 	"order-pipeline/internal/service/tracker"
 )
@@ -36,7 +35,7 @@ func TestProcess(t *testing.T) {
 				FailStep: "payment",
 				DelayMS:  map[string]int64{"payment": 1},
 			},
-			wantErr: apperr.ErrPaymentDeclined,
+			wantErr: ErrDeclined,
 		},
 		{
 			name: "invalid_amount",
@@ -45,7 +44,7 @@ func TestProcess(t *testing.T) {
 				Amount:  0,
 				DelayMS: map[string]int64{"payment": 1},
 			},
-			wantErr: apperr.ErrPaymentDeclined,
+			wantErr: ErrDeclined,
 		},
 	}
 

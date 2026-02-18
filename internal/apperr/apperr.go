@@ -1,4 +1,5 @@
-// Package apperr provides error handling and HTTP status code mapping.
+// Package apperr defines the AppError interface and helpers to extract
+// error classification from any error in a chain.
 package apperr
 
 import (
@@ -7,63 +8,34 @@ import (
 	"net/http"
 )
 
-var (
-	ErrPaymentDeclined    = errors.New("payment declined")
-	ErrVendorUnavailable  = errors.New("vendor unavailable")
-	ErrNoCourierAvailable = errors.New("no courier available")
-)
+// AppError is implemented by domain errors that carry their own
+// HTTP status code and classification kind.
+type AppError interface {
+	error
+	Kind() string
+	HTTPStatus() int
+}
 
-// Kind returns the kind of error as a string.
-func Kind(err error) string {
+func classify(err error) (kind string, status int) {
+	if err == nil {
+		return "", http.StatusOK
+	}
+	var ae AppError
+	if errors.As(err, &ae) {
+		return ae.Kind(), ae.HTTPStatus()
+	}
 	switch {
-	case err == nil:
-		return ""
-
-	case errors.Is(err, ErrPaymentDeclined):
-		return "payment_declined"
-
-	case errors.Is(err, ErrVendorUnavailable):
-		return "vendor_unavailable"
-
-	case errors.Is(err, ErrNoCourierAvailable):
-		return "no_courier"
-
 	case errors.Is(err, context.DeadlineExceeded):
-		return "timeout"
-
+		return "timeout", http.StatusGatewayTimeout
 	case errors.Is(err, context.Canceled):
-		return "canceled"
-
+		return "canceled", http.StatusRequestTimeout
 	default:
-		return "internal"
+		return "internal", http.StatusInternalServerError
 	}
 }
 
-// HTTPStatus returns the HTTP status code for the error.
-// It returns http.StatusOK for no error,
-// http.StatusBadRequest for payment declined,
-// http.StatusServiceUnavailable for vendor unavailable or no courier available,
-// http.StatusGatewayTimeout for timeout,
-// and http.StatusInternalServerError for other errors.
-func HTTPStatus(err error) int {
-	switch {
-	case err == nil:
-		return http.StatusOK
+// Kind returns the error classification string for err.
+func Kind(err error) string { k, _ := classify(err); return k }
 
-	case errors.Is(err, ErrPaymentDeclined):
-		return http.StatusBadRequest
-
-	case errors.Is(err, ErrVendorUnavailable),
-		errors.Is(err, ErrNoCourierAvailable):
-		return http.StatusServiceUnavailable
-
-	case errors.Is(err, context.DeadlineExceeded):
-		return http.StatusGatewayTimeout
-
-	case errors.Is(err, context.Canceled):
-		return http.StatusBadRequest
-
-	default:
-		return http.StatusInternalServerError
-	}
-}
+// HTTPStatus returns the HTTP status code for err.
+func HTTPStatus(err error) int { _, s := classify(err); return s }

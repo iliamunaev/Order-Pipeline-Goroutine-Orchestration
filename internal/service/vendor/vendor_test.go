@@ -4,39 +4,15 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
-	"order-pipeline/internal/apperr"
 	"order-pipeline/internal/model"
 	"order-pipeline/internal/service/tracker"
 )
-
-type fakeVendorService struct{}
-
-func (fakeVendorService) DelayForStep(delayMS map[string]int64, step string, defaultMS time.Duration) time.Duration {
-	if delayMS == nil {
-		return defaultMS
-	}
-	if ms, ok := delayMS[step]; ok && ms >= 0 {
-		return time.Duration(ms) * time.Millisecond
-	}
-	return defaultMS
-}
-
-func (fakeVendorService) SleepOrDone(ctx context.Context, delay time.Duration) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-time.After(delay):
-		return nil
-	}
-}
 
 func TestNotify(t *testing.T) {
 	t.Parallel()
 
 	tr := &tracker.Tracker{}
-	vs := fakeVendorService{}
 
 	tests := []struct {
 		name    string
@@ -59,7 +35,7 @@ func TestNotify(t *testing.T) {
 				FailStep: "vendor",
 				DelayMS:  map[string]int64{"vendor": 1},
 			},
-			wantErr: apperr.ErrVendorUnavailable,
+			wantErr: ErrUnavailable,
 		},
 	}
 
@@ -68,7 +44,7 @@ func TestNotify(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := Notify(context.Background(), tt.req, tr, vs)
+			err := Notify(context.Background(), tt.req, tr)
 			if tt.wantErr == nil && err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}

@@ -1,18 +1,27 @@
-// Package courier contains the courier assignment step for an order workflow.
-// It enforces concurrency limits and simulates assignment delays and failures.
+// Package courier implements the courier assignment step.
 package courier
 
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
-	"order-pipeline/internal/apperr"
 	"order-pipeline/internal/model"
-	shared "order-pipeline/internal/service/shared"
+	"order-pipeline/internal/service/shared"
 	"order-pipeline/internal/service/tracker"
 )
 
+type noCourierError struct{}
+
+func (noCourierError) Error() string   { return "no courier available" }
+func (noCourierError) Kind() string    { return "no_courier" }
+func (noCourierError) HTTPStatus() int { return http.StatusServiceUnavailable }
+
+// ErrNoCourierAvailable is returned when no courier can be assigned.
+var ErrNoCourierAvailable = noCourierError{}
+
+// Limiter abstracts bounded-concurrency resource acquisition.
 type Limiter interface {
 	Acquire(context.Context) error
 	Release()
@@ -35,7 +44,7 @@ func Assign(ctx context.Context, req model.OrderRequest, l Limiter, tr *tracker.
 	}
 
 	if req.FailStep == "courier" {
-		return fmt.Errorf("courier assign: %w", apperr.ErrNoCourierAvailable)
+		return fmt.Errorf("courier assign: %w", ErrNoCourierAvailable)
 	}
 
 	return nil

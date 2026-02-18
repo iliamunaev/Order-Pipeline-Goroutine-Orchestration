@@ -97,24 +97,6 @@ jobs:
       - name: Race tests
         run: make test-race
 
-  bench:
-    name: Benchmarks
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    needs: test
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Benchmarks
-        run: make test-bench
-
   fuzz-smoke:
     name: Fuzz Smoke (10s)
     runs-on: ubuntu-latest

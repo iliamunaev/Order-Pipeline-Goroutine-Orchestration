@@ -1,23 +1,27 @@
-// Package payment contains the payment step logic for an order workflow.
-// It validates amounts and simulates failures and delays.
+// Package payment implements the payment processing step.
 package payment
 
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
-	"order-pipeline/internal/apperr"
 	"order-pipeline/internal/model"
-	shared "order-pipeline/internal/service/shared"
+	"order-pipeline/internal/service/shared"
 	"order-pipeline/internal/service/tracker"
 )
 
+type declinedError struct{}
+
+func (declinedError) Error() string   { return "payment declined" }
+func (declinedError) Kind() string    { return "payment_declined" }
+func (declinedError) HTTPStatus() int { return http.StatusBadRequest }
+
+// ErrDeclined is returned when a payment is declined or the amount is invalid.
+var ErrDeclined = declinedError{}
+
 // Process runs the payment step for an order.
-// It increments the tracker,
-// sleeps for the delay,
-// returns an error if the payment fails,
-// and returns an error if the amount is less than or equal to 0.
 func Process(ctx context.Context, req model.OrderRequest, tr *tracker.Tracker) error {
 	tr.Inc()
 	defer tr.Dec()
@@ -29,11 +33,11 @@ func Process(ctx context.Context, req model.OrderRequest, tr *tracker.Tracker) e
 	}
 
 	if req.FailStep == "payment" {
-		return fmt.Errorf("payment: %w", apperr.ErrPaymentDeclined)
+		return fmt.Errorf("payment: %w", ErrDeclined)
 	}
 
 	if req.Amount <= 0 {
-		return fmt.Errorf("payment: %w", apperr.ErrPaymentDeclined)
+		return fmt.Errorf("payment: %w", ErrDeclined)
 	}
 
 	return nil

@@ -1,5 +1,5 @@
-// /internal/service/shared/shared.go
-package helpers
+// Package shared provides delay and sleep helpers used across service steps.
+package shared
 
 import (
 	"context"
@@ -22,14 +22,13 @@ func SleepOrDone(ctx context.Context, d time.Duration) error {
 	if d <= 0 {
 		return nil
 	}
-	// create a timer with the duration
 	t := time.NewTimer(d)
 	defer t.Stop()
 
 	select {
-	case <-t.C: // timer completed
+	case <-t.C:
 		return nil
-	case <-ctx.Done(): // context cancelled or deadline exceeded
+	case <-ctx.Done():
 		return ctx.Err()
 	}
 }
