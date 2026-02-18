@@ -155,6 +155,19 @@ curl -i -X POST http://localhost:8080/order \
 └── README.md
 ```
 
+## Dependancy layout
+
+```bash
+main.go
+ ├── model
+ ├── order         → model
+ ├── httptransport → model
+ ├── payment       → model, shared, tracker
+ ├── vendor        → model, shared, tracker
+ ├── courier       → model, shared, tracker
+ ├── pool          → (stdlib only)
+ └── tracker       → (stdlib only)
+ ```
 ## Testing
 
 ```bash

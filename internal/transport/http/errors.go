@@ -9,6 +9,7 @@ import (
 // kinder is satisfied by domain errors
 // that carry a classification kind.
 type kinder interface {
+	error
 	Kind() string
 }
 
@@ -20,6 +21,7 @@ var kindToStatus = map[string]int{
 	"no_courier":         http.StatusServiceUnavailable,
 	"timeout":            http.StatusGatewayTimeout,
 	"canceled":           http.StatusRequestTimeout,
+	"internal":           http.StatusInternalServerError,
 }
 
 // errorKind returns the kind of an error.
@@ -45,7 +47,8 @@ func httpStatus(err error) int {
 	if err == nil {
 		return http.StatusOK
 	}
-	if s, ok := kindToStatus[errorKind(err)]; ok {
+	kind := errorKind(err)
+	if s, ok := kindToStatus[kind]; ok {
 		return s
 	}
 	return http.StatusInternalServerError
