@@ -6,8 +6,10 @@ import (
 	"net/http"
 	"time"
 
-	"order-pipeline/internal/app"
-	"order-pipeline/internal/handler"
+	"order-pipeline/internal/order"
+	"order-pipeline/internal/service/pool"
+	"order-pipeline/internal/service/tracker"
+	httptransport "order-pipeline/internal/transport/http"
 )
 
 func main() {
@@ -16,17 +18,16 @@ func main() {
 	}
 }
 
-// Run initializes the application and handler,
-// creates a new HTTP server, and listens for requests.
-// Config is used to initialize the application and handler.
-// RequestTimeout is used to set the timeout for the HTTP server.
-// RequestTimeout is used to protect the server from hanging/slow downstream calls,
-// prevent goroutines/resources from being tied up too long,
-// give clients predictable failure instead of indefinite waiting,
-// and enable retries on client side.
+// run wires services and starts the HTTP server.
+// RequestTimeout bounds downstream calls so clients get predictable failures
+// and goroutines are not tied up indefinitely.
 func run() error {
-	a := app.New(app.Config{Couriers: 5, RequestTimeout: 10 * time.Second})
-	h := handler.New(a.OrderService, a.RequestTimeout)
+	const requestTimeout = 10 * time.Second
+
+	p := pool.New(5)
+	tr := &tracker.Tracker{}
+	orderSvc := order.New(p, tr)
+	h := httptransport.New(orderSvc, requestTimeout)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/order", h.HandleOrder)
@@ -36,7 +37,7 @@ func run() error {
 		Handler:           mux,
 		ReadTimeout:       10 * time.Second,
 		ReadHeaderTimeout: 3 * time.Second,
-		WriteTimeout:      10 * time.Second,
+		WriteTimeout:      requestTimeout + 5*time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
 

@@ -1,187 +1,217 @@
-# Order Pipeline
+# Order Pipeline — Concurrent Order Processing Service
 
-This project demonstrates how to orchestrate multiple concurrent steps in a safe, cancellable way. The goal is to run payment, vendor notification, and courier assignment in parallel, stop the whole workflow on failure/timeout, and keep concurrency bounded.
+An HTTP service that processes orders by running payment, vendor notification,
+and courier assignment steps **concurrently**. When any step fails or the
+request times out, in-flight work is canceled immediately.
 
-Approach:
-- Structured concurrency with `errgroup.WithContext`
-- `Context` deadlines to cancel slow work
-- Bounded concurrency using a pool (`semaphore`)
-- Thread‑safe result aggregation + lightweight tracking
-- Consistent `error mapping` to response status/kind
+The project simulates a real-world delivery order flow to demonstrate
+Go concurrency patterns, structured error handling, clean architecture, and
+thorough testing.
 
-## Notes
-- The HTTP layer is intentionally thin: decode/validate request, call app orchestration, encode response.
-- Workflow orchestration lives in the app layer (`internal/app/order`).
-- The project (and tests) focus on goroutine orchestration, cancellation, error propagation, and concurrency invariants (pool/tracker behavior).
+## Features
+
+- **Structured concurrency** — `errgroup.WithContext` launches parallel steps
+  and cancels siblings on first failure.
+- **Bounded concurrency** — a channel-based semaphore limits simultaneous
+  courier assignments, preventing resource exhaustion.
+- **Context propagation** — request timeouts flow through every goroutine;
+  all blocking operations (`sleep`, `pool.Acquire`) respect `ctx.Done()`.
+- **Interface-driven design** — the HTTP handler depends on an `orderProcessor`
+  interface, not concrete types. Services own their error semantics via the
+  `AppError` interface (structural typing, no coupling).
+- **Layered architecture** — transport (HTTP) / orchestration (order) / domain services
+  are cleanly separated. Dependencies point inward.
+- **Testing at every level** — unit tests with stubs, integration tests with
+  real services, table-driven tests, stress tests (20k concurrent requests),
+  race detection, benchmarks, and fuzz testing.
+
 ## Requirements
 
 - Go 1.24+
 
-## Usage
+## Quick start
 
 ```bash
 git clone https://github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration
 cd Order-Pipeline-Goroutine-Orchestration
+make run
 ```
 
-```bash
-go run ./cmd/server
-```
 Server listens on `:8080`.
 
-Clean port if needed:
-```bash
-sudo lsof -i :8080
-```
-```bash
-kill <process>
-```
+## API
 
-## Endpoint
+### `POST /order`
 
-- `POST /order` -> processes an order
+**Request body**
 
-In other console run:
+| Field       | Type              | Required | Description                                            |
+|-------------|-------------------|----------|--------------------------------------------------------|
+| `order_id`  | string            | yes      | Order identifier                                       |
+| `amount`    | int               | no       | Payment amount (<=0 triggers `payment_declined`)       |
+| `fail_step` | string            | no       | Force a failure: `"payment"`, `"vendor"`, `"courier"`  |
+| `delay_ms`  | map[string]int    | no       | Per-step delay overrides in ms                         |
+
+### Examples
+
+**Success (200 OK)**
+
 ```bash
-# 200 OK
 curl -i -X POST http://localhost:8080/order \
   -H 'Content-Type: application/json' \
-  -d '{"order_id":"o1","amount":10}'
+  -d '{"order_id":"o-1","amount":1200}'
 ```
-
-```bash
-# 400 Bad Request
-# "error":{"kind":"payment_declined","message":"order failed"}}
-curl -i -X POST http://localhost:8080/order \
-  -H 'Content-Type: application/json' \
-  -d '{"order_id":"o2","amount":10,"fail_step":"payment","delay_ms":{"vendor":800,"courier":800}}'
-```
-
-```bash
-# 504 Gateway Timeout
-# "error":{"kind":"timeout","message":"order failed"}}
-curl -i -X POST http://localhost:8080/order \
-  -H 'Content-Type: application/json' \
-  -d '{"order_id":"o3","amount":10,"delay_ms":{"payment":3000,"vendor":3000,"courier":3000}}'
-```
-
-```bash
-# 503 Service Unavailable
-# "error":{"kind":"vendor_unavailable","message":"order failed"}}
-curl -i -X POST http://localhost:8080/order \
-  -H 'Content-Type: application/json' \
-  -d '{"order_id":"o2","amount":10,"fail_step":"vendor","delay_ms":{"vendor":800,"courier":800}}'
-```
-
-
-### Order request body
 
 ```json
 {
-  "order_id": "o1",
-  "amount": 1200,
-  "fail_step": "payment",
-  "delay_ms": {
-    "payment": 150,
-    "vendor": 200,
-    "courier": 100
-  }
+  "status": "ok",
+  "order_id": "o-1",
+  "steps": [
+    { "name": "payment", "status": "ok", "duration_ms": 152 },
+    { "name": "vendor",  "status": "ok", "duration_ms": 201 },
+    { "name": "courier", "status": "ok", "duration_ms": 103 }
+  ]
 }
 ```
 
-- `fail_step` can be `payment`, `vendor`, or `courier`
-- `delay_ms` overrides per-step delays in milliseconds
+**Payment declined (400)**
 
+```bash
+curl -i -X POST http://localhost:8080/order \
+  -H 'Content-Type: application/json' \
+  -d '{"order_id":"o-2","amount":10,"fail_step":"payment","delay_ms":{"vendor":800,"courier":800}}'
+```
+
+```json
+{
+  "status": "error",
+  "order_id": "o-2",
+  "steps": [
+    { "name": "payment", "status": "error", "duration_ms": 151, "detail": "payment_declined" },
+    { "name": "vendor",  "status": "canceled", "duration_ms": 152 },
+    { "name": "courier", "status": "canceled", "duration_ms": 152 }
+  ],
+  "error": { "kind": "payment_declined", "message": "order failed" }
+}
+```
+
+**Vendor unavailable (503)**
+
+```bash
+curl -i -X POST http://localhost:8080/order \
+  -H 'Content-Type: application/json' \
+  -d '{"order_id":"o-3","amount":10,"fail_step":"vendor","delay_ms":{"vendor":100,"courier":800}}'
+```
+
+**Timeout (504)**
+
+```bash
+curl -i -X POST http://localhost:8080/order \
+  -H 'Content-Type: application/json' \
+  -d '{"order_id":"o-4","amount":10,"delay_ms":{"payment":15000,"vendor":15000,"courier":15000}}'
+```
 
 ## Project layout
 
-```text
+```
 .
 ├── cmd
-│   └── server
-│       └── main.go
+│   └── server
+│       └── main.go                  composition root — wires services, starts server
+├── internal
+│   ├── apperr
+│   │   ├── apperr.go                AppError interface + Kind/HTTPStatus extractors
+│   │   └── apperr_test.go
+│   ├── model
+│   │   └── order.go                 request / response DTOs
+│   ├── order
+│   │   └── order.go                 orchestration — errgroup, record, flattenResults
+│   ├── service
+│   │   ├── courier
+│   │   │   ├── courier.go           courier assignment with bounded concurrency
+│   │   │   └── courier_test.go
+│   │   ├── payment
+│   │   │   ├── payment.go           payment validation and processing
+│   │   │   └── payment_test.go
+│   │   ├── pool
+│   │   │   ├── pool.go              channel-based semaphore (1–128 slots)
+│   │   │   └── pool_test.go
+│   │   ├── shared
+│   │   │   └── shared.go            DelayForStep + SleepOrDone helpers
+│   │   ├── tracker
+│   │   │   ├── tracker.go           atomic in-flight counter
+│   │   │   └── tracker_test.go
+│   │   └── vendor
+│   │       ├── vendor.go            vendor notification
+│   │       └── vendor_test.go
+│   └── transport
+│       └── http
+│           ├── handler.go           HTTP handler — validate, delegate, respond
+│           └── handler_test.go      unit + integration + stress tests
 ├── go.mod
 ├── go.sum
-├── internal
-│   ├── app
-│   │   ├── app.go
-│   │   └── order
-│   │       └── order.go
-│   ├── apperr
-│   │   ├── apperr.go
-│   │   └── apperr_test.go
-│   ├── handler
-│   │   ├── handler.go
-│   │   └── handler_test.go
-│   ├── model
-│   │   └── order.go
-│   └── service
-│       ├── courier
-│       │   ├── courier.go
-│       │   └── courier_test.go
-│       ├── payment
-│       │   ├── payment.go
-│       │   └── payment_test.go
-│       ├── pool
-│       │   ├── pool.go
-│       │   └── pool_test.go
-│       ├── shared
-│       │   └── shared.go
-│       ├── tracker
-│       │   ├── tracker.go
-│       │   └── tracker_test.go
-│       └── vendor
-│           ├── vendor.go
-│           └── vendor_test.go
+├── Makefile
+├── DEV-GUIDE.md                     detailed architecture guide
 └── README.md
 ```
 
-
 ## Testing
 
-### All
 ```bash
-make test-all
+make test            # run all tests
+make test-race       # with race detector
+make test-bench      # benchmarks (pool throughput at various capacities)
+make test-fuzz       # fuzz pool acquire/release (10s)
+make test-cover      # coverage report
+make test-vet        # static analysis
+make test-all        # test + race + bench + fuzz
 ```
 
-### All, except benchmark, fuzzing
-```bash
-make test
-```
+### Test strategy
 
-### Benchmark test only
-```bash
-make test-bench
-```
+| Layer          | What is tested                                             | Approach               |
+|----------------|------------------------------------------------------------|------------------------|
+| Handler        | HTTP method, JSON validation, error mapping, success path  | Stub-based unit tests  |
+| Handler        | Payment failure cancels vendor + courier                   | Integration test       |
+| Handler        | 20,000 concurrent requests with mixed outcomes             | Stress test            |
+| Payment        | Success, decline, invalid amount                           | Table-driven           |
+| Vendor         | Success, unavailable                                       | Table-driven           |
+| Courier        | Success, failure, context timeout                          | Table-driven           |
+| Pool           | Size clamping, acquire/release, blocking, timeout          | Table-driven + fuzz    |
+| Tracker        | Inc/dec correctness, concurrent safety                     | Parallel goroutines    |
+| apperr         | Kind + HTTP status for every error type, wrapped errors    | Table-driven           |
 
-### Fuzzing test only
-```bash
-make test-fuzz
-```
+### Coverage
 
-### Race detector
-```bash
-make test-race
-```
-
-### Coverage:
-```bash
-make test-cover
-```
-
-### Display coverage in a browser
-_Requirements: python3_
 ```bash
 make test-cover
 go tool cover -html=coverage.out -o coverage.html
 ```
+
+Then open `coverage.html` in a browser, or serve it:
+
 ```bash
 python3 -m http.server 8000
+# open http://localhost:8000/coverage.html
 ```
-Open in a browser:
-```bash
-http://localhost:8000/coverage.html
-```
-Example:
 
-############## Add images
+## Error mapping
+
+| Error                          | Kind                 | HTTP   |
+|--------------------------------|----------------------|--------|
+| `payment.ErrDeclined`          | `payment_declined`   | 400    |
+| `vendor.ErrUnavailable`        | `vendor_unavailable` | 503    |
+| `courier.ErrNoCourierAvailable`| `no_courier`         | 503    |
+| `context.DeadlineExceeded`     | `timeout`            | 504    |
+| `context.Canceled`             | `canceled`           | 408    |
+| unknown                        | `internal`           | 500    |
+
+Each service defines a typed sentinel error implementing `apperr.AppError`.
+The `apperr` package uses `errors.As` to extract kind and status from any
+error chain — it has zero knowledge of service packages.
+
+## Architecture notes
+
+See [DEV-GUIDE.md](DEV-GUIDE.md) for a detailed walkthrough of the request
+lifecycle, concurrency model, dependency flow, configuration, and design
+decisions.

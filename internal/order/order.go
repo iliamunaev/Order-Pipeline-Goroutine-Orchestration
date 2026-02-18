@@ -1,4 +1,4 @@
-// Package order contains application orchestration for order processing.
+// Package order orchestrates concurrent order processing.
 package order
 
 import (
@@ -14,7 +14,6 @@ import (
 	"order-pipeline/internal/service/courier"
 	"order-pipeline/internal/service/payment"
 	"order-pipeline/internal/service/pool"
-	shared "order-pipeline/internal/service/shared"
 	"order-pipeline/internal/service/tracker"
 	"order-pipeline/internal/service/vendor"
 )
@@ -23,32 +22,24 @@ import (
 type Service struct {
 	pool *pool.Pool
 	tr   *tracker.Tracker
-	vs   vendor.Helper
 }
 
-type defaultVendorService struct{}
-
-func (defaultVendorService) DelayForStep(delayMS map[string]int64, step string, defaultMS time.Duration) time.Duration {
-	return shared.DelayForStep(delayMS, step, defaultMS)
-}
-
-func (defaultVendorService) SleepOrDone(ctx context.Context, delay time.Duration) error {
-	return shared.SleepOrDone(ctx, delay)
-}
-
-// New creates an orchestration service with dependencies.
-func New(pool *pool.Pool, tr *tracker.Tracker) *Service {
+// New creates a Service with the given pool and tracker.
+func New(p *pool.Pool, tr *tracker.Tracker) *Service {
+	if p == nil {
+		panic("order.New: nil pool")
+	}
 	if tr == nil {
 		tr = &tracker.Tracker{}
 	}
 	return &Service{
-		pool: pool,
+		pool: p,
 		tr:   tr,
-		vs:   defaultVendorService{},
 	}
 }
 
-// Process runs payment, vendor, and courier steps concurrently and returns step results.
+// Process runs payment, vendor, and courier steps concurrently
+// and returns per-step results in deterministic order.
 func (s *Service) Process(ctx context.Context, req model.OrderRequest) ([]model.StepResult, error) {
 	g, ctx := errgroup.WithContext(ctx)
 
@@ -86,13 +77,15 @@ func (s *Service) Process(ctx context.Context, req model.OrderRequest) ([]model.
 	}
 
 	g.Go(record("payment", func() error { return payment.Process(ctx, req, s.tr) }))
-	g.Go(record("vendor", func() error { return vendor.Notify(ctx, req, s.tr, s.vs) }))
+	g.Go(record("vendor", func() error { return vendor.Notify(ctx, req, s.tr) }))
 	g.Go(record("courier", func() error { return courier.Assign(ctx, req, s.pool, s.tr) }))
 
 	err := g.Wait()
 	return flattenResults(results), err
 }
 
+// flattenResults extracts steps in a fixed order so the response is deterministic
+// regardless of which goroutine finished first.
 func flattenResults(m map[string]model.StepResult) []model.StepResult {
 	out := make([]model.StepResult, 0, 3)
 	if r, ok := m["payment"]; ok {

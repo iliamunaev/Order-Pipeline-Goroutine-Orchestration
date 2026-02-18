@@ -1,5 +1,8 @@
-.PHONY: test-all test test-bench test-fuzz test-race test-cover
+.PHONY: test-all test test-bench test-fuzz \
+		test-race test-cover test-vet run \
+		run
 
+# tests 
 test-all: test test-race test-bench test-fuzz
 
 test:
@@ -18,3 +21,11 @@ test-fuzz:
 test-cover:
 	go test ./... -coverprofile=coverage.out
 	go tool cover -func=coverage.out
+
+test-vet:
+	go vet ./...
+
+# run
+
+run:
+	go run ./cmd/server

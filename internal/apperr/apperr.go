@@ -1,39 +1,41 @@
-// Package apperr provides error handling and HTTP status code mapping.
+// Package apperr defines the AppError interface and helpers to extract
+// error classification from any error in a chain.
 package apperr
 
 import (
 	"context"
 	"errors"
 	"net/http"
-
-	"order-pipeline/internal/service/courier"
-	"order-pipeline/internal/service/payment"
-	"order-pipeline/internal/service/vendor"
 )
 
-type Info struct {
-    Kind   string
-    Status int
+// AppError is implemented by domain errors that carry their own
+// HTTP status code and classification kind.
+type AppError interface {
+	error
+	Kind() string
+	HTTPStatus() int
 }
 
-func classify(err error) Info {
-    switch {
-    case err == nil:
-        return Info{"", http.StatusOK}
-    case errors.Is(err, payment.ErrDeclined):
-        return Info{"payment_declined", http.StatusBadRequest}
-    case errors.Is(err, vendor.ErrUnavailable):
-        return Info{"vendor_unavailable", http.StatusServiceUnavailable}
-    case errors.Is(err, courier.ErrNoCourierAvailable):
-        return Info{"no_courier", http.StatusServiceUnavailable}
-    case errors.Is(err, context.DeadlineExceeded):
-        return Info{"timeout", http.StatusGatewayTimeout}
-    case errors.Is(err, context.Canceled):
-        return Info{"canceled", http.StatusRequestTimeout}
-    default:
-        return Info{"internal", http.StatusInternalServerError}
-    }
+func classify(err error) (kind string, status int) {
+	if err == nil {
+		return "", http.StatusOK
+	}
+	var ae AppError
+	if errors.As(err, &ae) {
+		return ae.Kind(), ae.HTTPStatus()
+	}
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		return "timeout", http.StatusGatewayTimeout
+	case errors.Is(err, context.Canceled):
+		return "canceled", http.StatusRequestTimeout
+	default:
+		return "internal", http.StatusInternalServerError
+	}
 }
 
-func Kind(err error) string    { return classify(err).Kind }
-func HTTPStatus(err error) int { return classify(err).Status }
+// Kind returns the error classification string for err.
+func Kind(err error) string { k, _ := classify(err); return k }
+
+// HTTPStatus returns the HTTP status code for err.
+func HTTPStatus(err error) int { _, s := classify(err); return s }

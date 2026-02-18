@@ -1,10 +1,9 @@
-// pool.go
+// Package pool provides a bounded concurrency semaphore.
 package pool
 
 import "context"
 
 // Pool limits concurrent resource assignments.
-// Mimics real-world resource pools like availability, capacity, etc.
 type Pool struct {
 	sem chan struct{}
 }
