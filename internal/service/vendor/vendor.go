@@ -4,13 +4,15 @@ package vendor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
-	"order-pipeline/internal/apperr"
 	"order-pipeline/internal/model"
 	"order-pipeline/internal/service/tracker"
 )
+
+var ErrUnavailable = errors.New("vendor unavailable")
 
 type Helper interface {
 	DelayForStep(delayMS map[string]int64, step string, defaultMS time.Duration) time.Duration
@@ -40,7 +42,7 @@ func Notify(ctx context.Context, req model.OrderRequest, tr *tracker.Tracker, h 
 
 	// if the vendor fails, return an error
 	if req.FailStep == "vendor" {
-		return fmt.Errorf("vendor notify: %w", apperr.ErrVendorUnavailable)
+		return fmt.Errorf("vendor notify: %w", ErrUnavailable)
 	}
 
 	return nil

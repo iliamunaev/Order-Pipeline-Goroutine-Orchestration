@@ -4,14 +4,16 @@ package courier
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
-	"order-pipeline/internal/apperr"
 	"order-pipeline/internal/model"
 	shared "order-pipeline/internal/service/shared"
 	"order-pipeline/internal/service/tracker"
 )
+
+var ErrNoCourierAvailable = errors.New("no courier available")
 
 type Limiter interface {
 	Acquire(context.Context) error
@@ -35,7 +37,7 @@ func Assign(ctx context.Context, req model.OrderRequest, l Limiter, tr *tracker.
 	}
 
 	if req.FailStep == "courier" {
-		return fmt.Errorf("courier assign: %w", apperr.ErrNoCourierAvailable)
+		return fmt.Errorf("courier assign: %w", ErrNoCourierAvailable)
 	}
 
 	return nil

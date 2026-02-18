@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"order-pipeline/internal/apperr"
 	"order-pipeline/internal/model"
 	"order-pipeline/internal/service/tracker"
 )
@@ -59,7 +58,7 @@ func TestNotify(t *testing.T) {
 				FailStep: "vendor",
 				DelayMS:  map[string]int64{"vendor": 1},
 			},
-			wantErr: apperr.ErrVendorUnavailable,
+			wantErr: ErrUnavailable,
 		},
 	}
 

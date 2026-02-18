@@ -4,14 +4,16 @@ package payment
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
-	"order-pipeline/internal/apperr"
 	"order-pipeline/internal/model"
 	shared "order-pipeline/internal/service/shared"
 	"order-pipeline/internal/service/tracker"
 )
+
+var ErrDeclined = errors.New("payment declined")
 
 // Process runs the payment step for an order.
 // It increments the tracker,
@@ -29,11 +31,11 @@ func Process(ctx context.Context, req model.OrderRequest, tr *tracker.Tracker) e
 	}
 
 	if req.FailStep == "payment" {
-		return fmt.Errorf("payment: %w", apperr.ErrPaymentDeclined)
+		return fmt.Errorf("payment: %w", ErrDeclined)
 	}
 
 	if req.Amount <= 0 {
-		return fmt.Errorf("payment: %w", apperr.ErrPaymentDeclined)
+		return fmt.Errorf("payment: %w", ErrDeclined)
 	}
 
 	return nil

@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"order-pipeline/internal/apperr"
 	"order-pipeline/internal/model"
 	"order-pipeline/internal/service/pool"
 	"order-pipeline/internal/service/tracker"
@@ -39,7 +38,7 @@ func TestAssign(t *testing.T) {
 				FailStep: "courier",
 				DelayMS:  map[string]int64{"courier": 1},
 			},
-			wantErr: apperr.ErrNoCourierAvailable,
+			wantErr: ErrNoCourierAvailable,
 		},
 	}
 
