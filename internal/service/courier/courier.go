@@ -4,7 +4,6 @@ package courier
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"time"
 
 	"order-pipeline/internal/model"
@@ -14,21 +13,20 @@ import (
 
 type noCourierError struct{}
 
-func (noCourierError) Error() string   { return "no courier available" }
-func (noCourierError) Kind() string    { return "no_courier" }
-func (noCourierError) HTTPStatus() int { return http.StatusServiceUnavailable }
+func (noCourierError) Error() string { return "no courier available" }
+func (noCourierError) Kind() string  { return "no_courier" }
 
 // ErrNoCourierAvailable is returned when no courier can be assigned.
 var ErrNoCourierAvailable = noCourierError{}
 
-// Limiter abstracts bounded-concurrency resource acquisition.
-type Limiter interface {
+// limiter abstracts bounded-concurrency resource acquisition.
+type limiter interface {
 	Acquire(context.Context) error
 	Release()
 }
 
 // Assign runs the courier assignment step for an order.
-func Assign(ctx context.Context, req model.OrderRequest, l Limiter, tr *tracker.Tracker) error {
+func Assign(ctx context.Context, req model.OrderRequest, l limiter, tr *tracker.Tracker) error {
 	tr.Inc()
 	defer tr.Dec()
 

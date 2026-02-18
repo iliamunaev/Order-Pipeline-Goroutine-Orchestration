@@ -9,47 +9,46 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"order-pipeline/internal/apperr"
 	"order-pipeline/internal/model"
-	"order-pipeline/internal/service/courier"
-	"order-pipeline/internal/service/payment"
-	"order-pipeline/internal/service/pool"
-	"order-pipeline/internal/service/tracker"
-	"order-pipeline/internal/service/vendor"
 )
+
+// Step is a named unit of work in the order pipeline.
+type Step struct {
+	Name string
+	Run  func(ctx context.Context, req model.OrderRequest) error
+}
 
 // Service orchestrates the order workflow.
 type Service struct {
-	pool *pool.Pool
-	tr   *tracker.Tracker
+	steps []Step
 }
 
-// New creates a Service with the given pool and tracker.
-func New(p *pool.Pool, tr *tracker.Tracker) *Service {
-	if p == nil {
-		panic("order.New: nil pool")
+// New creates a Service that runs the given steps concurrently.
+func New(steps []Step) *Service {
+	if len(steps) == 0 {
+		panic("order.New: no steps")
 	}
-	if tr == nil {
-		tr = &tracker.Tracker{}
-	}
-	return &Service{
-		pool: p,
-		tr:   tr,
-	}
+	return &Service{steps: steps}
 }
 
-// Process runs payment, vendor, and courier steps concurrently
-// and returns per-step results in deterministic order.
+// kinder is satisfied by errors that carry a classification kind.
+type kinder interface {
+	Kind() string
+}
+
+// Process runs all steps concurrently and returns per-step results
+// in registration order.
 func (s *Service) Process(ctx context.Context, req model.OrderRequest) ([]model.StepResult, error) {
 	g, ctx := errgroup.WithContext(ctx)
 
-	results := make(map[string]model.StepResult, 3)
+	results := make(map[string]model.StepResult, len(s.steps))
 	var mu sync.Mutex
 
-	record := func(name string, fn func() error) func() error {
-		return func() error {
+	for _, step := range s.steps {
+		step := step
+		g.Go(func() error {
 			start := time.Now()
-			err := fn()
+			err := step.Run(ctx, req)
 			durMS := time.Since(start).Milliseconds()
 
 			st := "ok"
@@ -59,13 +58,16 @@ func (s *Service) Process(ctx context.Context, req model.OrderRequest) ([]model.
 					st = "canceled"
 				} else {
 					st = "error"
-					detail = apperr.Kind(err)
+					var k kinder
+					if errors.As(err, &k) {
+						detail = k.Kind()
+					}
 				}
 			}
 
 			mu.Lock()
-			results[name] = model.StepResult{
-				Name:       name,
+			results[step.Name] = model.StepResult{
+				Name:       step.Name,
 				Status:     st,
 				DurationMS: durMS,
 				Detail:     detail,
@@ -73,29 +75,17 @@ func (s *Service) Process(ctx context.Context, req model.OrderRequest) ([]model.
 			mu.Unlock()
 
 			return err
+		})
+	}
+
+	err := g.Wait()
+
+	out := make([]model.StepResult, 0, len(s.steps))
+	for _, step := range s.steps {
+		if r, ok := results[step.Name]; ok {
+			out = append(out, r)
 		}
 	}
 
-	g.Go(record("payment", func() error { return payment.Process(ctx, req, s.tr) }))
-	g.Go(record("vendor", func() error { return vendor.Notify(ctx, req, s.tr) }))
-	g.Go(record("courier", func() error { return courier.Assign(ctx, req, s.pool, s.tr) }))
-
-	err := g.Wait()
-	return flattenResults(results), err
-}
-
-// flattenResults extracts steps in a fixed order so the response is deterministic
-// regardless of which goroutine finished first.
-func flattenResults(m map[string]model.StepResult) []model.StepResult {
-	out := make([]model.StepResult, 0, 3)
-	if r, ok := m["payment"]; ok {
-		out = append(out, r)
-	}
-	if r, ok := m["vendor"]; ok {
-		out = append(out, r)
-	}
-	if r, ok := m["courier"]; ok {
-		out = append(out, r)
-	}
-	return out
+	return out, err
 }

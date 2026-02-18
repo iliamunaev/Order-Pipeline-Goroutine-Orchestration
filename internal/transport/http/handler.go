@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"time"
 
-	"order-pipeline/internal/apperr"
 	"order-pipeline/internal/model"
 )
 
@@ -84,12 +83,12 @@ func (h *Handler) HandleOrder(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		resp.Status = "error"
 		resp.Error = &model.ErrorPayload{
-			Kind:    apperr.Kind(err),
+			Kind:    errorKind(err),
 			Message: "order failed",
 		}
 	}
 
-	writeJSON(w, apperr.HTTPStatus(err), resp)
+	writeJSON(w, httpStatus(err), resp)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

@@ -1,14 +1,19 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"log"
 	"net/http"
 	"time"
 
+	"order-pipeline/internal/model"
 	"order-pipeline/internal/order"
+	"order-pipeline/internal/service/courier"
+	"order-pipeline/internal/service/payment"
 	"order-pipeline/internal/service/pool"
 	"order-pipeline/internal/service/tracker"
+	"order-pipeline/internal/service/vendor"
 	httptransport "order-pipeline/internal/transport/http"
 )
 
@@ -23,10 +28,24 @@ func main() {
 // and goroutines are not tied up indefinitely.
 func run() error {
 	const requestTimeout = 10 * time.Second
+	const poolSize = 5
 
-	p := pool.New(5)
+	p := pool.New(poolSize)
 	tr := &tracker.Tracker{}
-	orderSvc := order.New(p, tr)
+
+	steps := []order.Step{
+		{Name: "payment", Run: func(ctx context.Context, req model.OrderRequest) error {
+			return payment.Process(ctx, req, tr)
+		}},
+		{Name: "vendor", Run: func(ctx context.Context, req model.OrderRequest) error {
+			return vendor.Notify(ctx, req, tr)
+		}},
+		{Name: "courier", Run: func(ctx context.Context, req model.OrderRequest) error {
+			return courier.Assign(ctx, req, p, tr)
+		}},
+	}
+
+	orderSvc := order.New(steps)
 	h := httptransport.New(orderSvc, requestTimeout)
 
 	mux := http.NewServeMux()

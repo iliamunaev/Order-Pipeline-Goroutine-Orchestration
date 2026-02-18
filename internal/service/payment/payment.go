@@ -4,7 +4,6 @@ package payment
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"time"
 
 	"order-pipeline/internal/model"
@@ -14,9 +13,8 @@ import (
 
 type declinedError struct{}
 
-func (declinedError) Error() string   { return "payment declined" }
-func (declinedError) Kind() string    { return "payment_declined" }
-func (declinedError) HTTPStatus() int { return http.StatusBadRequest }
+func (declinedError) Error() string { return "payment declined" }
+func (declinedError) Kind() string  { return "payment_declined" }
 
 // ErrDeclined is returned when a payment is declined or the amount is invalid.
 var ErrDeclined = declinedError{}

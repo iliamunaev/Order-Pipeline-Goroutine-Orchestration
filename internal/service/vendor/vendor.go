@@ -4,7 +4,6 @@ package vendor
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"time"
 
 	"order-pipeline/internal/model"
@@ -14,9 +13,8 @@ import (
 
 type unavailableError struct{}
 
-func (unavailableError) Error() string   { return "vendor unavailable" }
-func (unavailableError) Kind() string    { return "vendor_unavailable" }
-func (unavailableError) HTTPStatus() int { return http.StatusServiceUnavailable }
+func (unavailableError) Error() string { return "vendor unavailable" }
+func (unavailableError) Kind() string  { return "vendor_unavailable" }
 
 // ErrUnavailable is returned when the vendor cannot be reached.
 var ErrUnavailable = unavailableError{}

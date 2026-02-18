@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -13,8 +14,11 @@ import (
 
 	"order-pipeline/internal/model"
 	"order-pipeline/internal/order"
+	"order-pipeline/internal/service/courier"
+	"order-pipeline/internal/service/payment"
 	"order-pipeline/internal/service/pool"
 	"order-pipeline/internal/service/tracker"
+	"order-pipeline/internal/service/vendor"
 )
 
 // --- stubs for unit tests ---
@@ -28,15 +32,13 @@ func (s *stubProcessor) Process(_ context.Context, _ model.OrderRequest) ([]mode
 	return s.steps, s.err
 }
 
-// testAppErr satisfies apperr.AppError via structural typing.
+// testAppErr satisfies the kinder interface via structural typing.
 type testAppErr struct {
-	kind   string
-	status int
+	kind string
 }
 
-func (e testAppErr) Error() string   { return e.kind }
-func (e testAppErr) Kind() string    { return e.kind }
-func (e testAppErr) HTTPStatus() int { return e.status }
+func (e testAppErr) Error() string { return e.kind }
+func (e testAppErr) Kind() string  { return e.kind }
 
 // --- unit tests (stub-based) ---
 
@@ -146,7 +148,7 @@ func TestHandleOrder_AppError(t *testing.T) {
 		steps: []model.StepResult{
 			{Name: "payment", Status: "error", Detail: "payment_declined"},
 		},
-		err: testAppErr{kind: "payment_declined", status: http.StatusBadRequest},
+		err: testAppErr{kind: "payment_declined"},
 	}
 	h := New(stub, 2*time.Second)
 
@@ -193,13 +195,94 @@ func TestNew_DefaultTimeout(t *testing.T) {
 	}
 }
 
+// --- error classification tests ---
+
+func TestErrorKind(t *testing.T) {
+	t.Parallel()
+
+	wrapped := fmt.Errorf("wrapped: %w", payment.ErrDeclined)
+
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{name: "nil", err: nil, want: ""},
+		{name: "payment_declined", err: payment.ErrDeclined, want: "payment_declined"},
+		{name: "payment_declined_wrapped", err: wrapped, want: "payment_declined"},
+		{name: "vendor_unavailable", err: vendor.ErrUnavailable, want: "vendor_unavailable"},
+		{name: "no_courier", err: courier.ErrNoCourierAvailable, want: "no_courier"},
+		{name: "deadline", err: context.DeadlineExceeded, want: "timeout"},
+		{name: "canceled", err: context.Canceled, want: "canceled"},
+		{name: "unknown", err: errors.New("unknown"), want: "internal"},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := errorKind(tt.err); got != tt.want {
+				t.Fatalf("expected %q, got %q", tt.want, got)
+			}
+		})
+	}
+}
+
+func TestHTTPStatus(t *testing.T) {
+	t.Parallel()
+
+	wrapped := fmt.Errorf("wrapped: %w", courier.ErrNoCourierAvailable)
+
+	tests := []struct {
+		name string
+		err  error
+		want int
+	}{
+		{name: "nil", err: nil, want: http.StatusOK},
+		{name: "payment_declined", err: payment.ErrDeclined, want: http.StatusBadRequest},
+		{name: "vendor_unavailable", err: vendor.ErrUnavailable, want: http.StatusServiceUnavailable},
+		{name: "no_courier", err: courier.ErrNoCourierAvailable, want: http.StatusServiceUnavailable},
+		{name: "no_courier_wrapped", err: wrapped, want: http.StatusServiceUnavailable},
+		{name: "deadline", err: context.DeadlineExceeded, want: http.StatusGatewayTimeout},
+		{name: "canceled", err: context.Canceled, want: http.StatusRequestTimeout},
+		{name: "unknown", err: errors.New("unknown"), want: http.StatusInternalServerError},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := httpStatus(tt.err); got != tt.want {
+				t.Fatalf("expected %d, got %d", tt.want, got)
+			}
+		})
+	}
+}
+
 // --- integration tests (real services) ---
 
-func TestOrder_PaymentFailureCancelsOthers(t *testing.T) {
-	p := pool.New(1)
+// newIntegrationHandler wires real services into a handler for integration tests.
+func newIntegrationHandler(poolSize int, timeout time.Duration) (*Handler, *tracker.Tracker) {
+	p := pool.New(poolSize)
 	tr := &tracker.Tracker{}
-	orderSvc := order.New(p, tr)
-	h := New(orderSvc, 2*time.Second)
+
+	steps := []order.Step{
+		{Name: "payment", Run: func(ctx context.Context, req model.OrderRequest) error {
+			return payment.Process(ctx, req, tr)
+		}},
+		{Name: "vendor", Run: func(ctx context.Context, req model.OrderRequest) error {
+			return vendor.Notify(ctx, req, tr)
+		}},
+		{Name: "courier", Run: func(ctx context.Context, req model.OrderRequest) error {
+			return courier.Assign(ctx, req, p, tr)
+		}},
+	}
+
+	return New(order.New(steps), timeout), tr
+}
+
+func TestOrder_PaymentFailureCancelsOthers(t *testing.T) {
+	h, _ := newIntegrationHandler(1, 2*time.Second)
 
 	reqBody := model.OrderRequest{
 		OrderID:  "o-test",
@@ -274,10 +357,7 @@ func TestHandler_Stress(t *testing.T) {
 		t.Skip("skipping stress test in short mode")
 	}
 
-	p := pool.New(4)
-	tr := &tracker.Tracker{}
-	orderSvc := order.New(p, tr)
-	h := New(orderSvc, 2*time.Second)
+	h, tr := newIntegrationHandler(4, 2*time.Second)
 
 	const workers = 100
 	const iterations = 200

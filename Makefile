@@ -1,6 +1,5 @@
 .PHONY: test-all test test-bench test-fuzz \
-		test-race test-cover test-vet run \
-		run
+		test-race test-cover vet lint fmt run 
 
 # tests 
 test-all: test test-race test-bench test-fuzz
@@ -22,10 +21,17 @@ test-cover:
 	go test ./... -coverprofile=coverage.out
 	go tool cover -func=coverage.out
 
-test-vet:
+# https://go.dev/src/cmd/vet/doc.go
+vet:
 	go vet ./...
 
-# run
+# https://golangci-lint.run/docs/
+lint:
+	golangci-lint run ./...
 
+fmt:
+	gofmt -w .
+
+# run
 run:
 	go run ./cmd/server

@@ -58,7 +58,7 @@ External dependencies:
 ```
 main  ──>  order  ──>  payment
        │          ├──>  vendor
-       │          ├──>  courier ──> pool (Limiter interface)
+       │          ├──>  courier ──> pool (limiter interface)
        │          ├──>  tracker
        │          └──>  apperr
        └──>  transport/http ──> apperr
