@@ -36,24 +36,21 @@ jobs:
             echo "$unformatted"
             exit 1
           fi
-
   lint:
     name: Lint (golangci-lint)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: fmt
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Go
-        uses: actions/setup-go@v5
+      - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v7
         with:
           version: v2.4.0
           args: --timeout=5m
