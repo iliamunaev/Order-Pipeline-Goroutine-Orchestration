@@ -31,7 +31,7 @@ thorough testing.
 
 ## Requirements
 
-- Go 1.26+
+- Go 1.25+
 
 ## Quick start
 
