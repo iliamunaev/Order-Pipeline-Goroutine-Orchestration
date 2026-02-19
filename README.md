@@ -16,6 +16,8 @@ thorough testing.
   courier assignments, preventing resource exhaustion.
 - **Context propagation** — request timeouts flow through every goroutine;
   all blocking operations (`sleep`, `pool.Acquire`) respect `ctx.Done()`.
+- **Modern Go idioms** — uses `sync.WaitGroup.Go` (Go 1.25+) to eliminate
+  manual `Add`/`Done` pairing in tests.
 - **Interface-driven design** — the HTTP handler depends on an `orderProcessor`
   interface, not concrete types. Services carry error semantics via structural
   typing (`Kind() string`) — no shared error package needed.
@@ -29,7 +31,7 @@ thorough testing.
 
 ## Requirements
 
-- Go 1.24+
+- Go 1.26+
 
 ## Quick start
 
@@ -202,7 +204,7 @@ make test-all        # test + race + bench + fuzz
 | Courier        | Success, failure, context timeout                          | Table-driven           |
 | Pool           | Size clamping, acquire/release, blocking, timeout          | Table-driven + fuzz    |
 | Pool           | Throughput at 1/2/8/64/128 capacity                        | Parallel benchmark     |
-| Tracker        | Inc/dec correctness, concurrent safety                     | Parallel goroutines    |
+| Tracker        | Inc/dec correctness, concurrent safety (`WaitGroup.Go`)    | Parallel goroutines    |
 
 ### Coverage
 

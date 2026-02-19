@@ -27,15 +27,13 @@ func TestTrackerConcurrent(t *testing.T) {
 	const iterations = 100
 
 	var wg sync.WaitGroup
-	wg.Add(goroutines)
 	for i := 0; i < goroutines; i++ {
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for j := 0; j < iterations; j++ {
 				tr.Inc()
 				tr.Dec()
 			}
-		}()
+		})
 	}
 	wg.Wait()
 

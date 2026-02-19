@@ -110,6 +110,9 @@ Key rules:
   globally at once (configurable, 1–128).
 - **tracker.Tracker** — atomic `Inc`/`Dec` counter. Every step increments on
   entry and decrements on exit. Useful for observability / drain checks.
+- **`sync.WaitGroup.Go`** (Go 1.25+) — used in tests to launch goroutines
+  without manual `Add`/`Done` pairing. Eliminates a common source of
+  deadlocks and panics.
 - **SleepOrDone** — `time.NewTimer` + `select` on `ctx.Done()`. Properly
   stops the timer on cancellation (no goroutine leak).
 
@@ -289,8 +292,9 @@ make test-all        # test + test-race + test-bench + test-fuzz
   the full pipeline through real services and verifies cancellation
   propagation.
 - **Stress test** — `TestHandler_Stress` fires 100 workers × 200 iterations
-  (20,000 requests) with mixed success/failure scenarios, verifying
-  correctness under concurrency. Skipped with `-short`.
+  (20,000 requests) with mixed success/failure scenarios using
+  `sync.WaitGroup.Go`, verifying correctness under concurrency.
+  Skipped with `-short`.
 - **Service tests** — each service package has table-driven tests for success
   and failure paths.
 - **Courier timeout test** — `TestAssignContextTimeout` verifies that a
@@ -299,7 +303,7 @@ make test-all        # test + test-race + test-bench + test-fuzz
 - **Pool tests** — size clamping, acquire/release blocking semantics, context
   timeout, parallel benchmark at 1/2/8/64/128 capacity, fuzz test.
 - **Tracker tests** — basic inc/dec, concurrent safety with 10 goroutines ×
-  100 iterations.
+  100 iterations using `sync.WaitGroup.Go`.
 
 ### CI
 
@@ -355,3 +359,9 @@ objects like `{...}{...}`).
 `requestTimeout` to complete. `WriteTimeout` must be strictly larger to
 allow the handler to write the response after the pipeline finishes or
 times out. The 5-second buffer accounts for JSON encoding and I/O.
+
+**`sync.WaitGroup.Go` in tests** — Go 1.25 introduced `WaitGroup.Go` which
+handles `Add(1)` and `defer Done()` internally. The stress test and tracker
+concurrency test use it to eliminate the `Add`/`Done` boilerplate and the
+risk of mismatched calls. The production pipeline uses `errgroup.Go` for
+its cancel-on-first-error semantics.

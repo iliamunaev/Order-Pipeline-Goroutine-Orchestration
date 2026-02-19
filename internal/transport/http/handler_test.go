@@ -366,10 +366,8 @@ func TestHandler_Stress(t *testing.T) {
 	errCh := make(chan error, workers*iterations)
 
 	for w := 0; w < workers; w++ {
-		wg.Add(1)
-		go func(worker int) {
-			defer wg.Done()
-
+		worker := w
+		wg.Go(func() {
 			for i := 0; i < iterations; i++ {
 				idx := worker*iterations + i
 				reqBody := model.OrderRequest{
@@ -402,11 +400,11 @@ func TestHandler_Stress(t *testing.T) {
 
 				req := httptest.NewRequest(http.MethodPost, "/order", bytes.NewReader(payload))
 				req.Header.Set("Content-Type", "application/json")
-				w := httptest.NewRecorder()
+				rec := httptest.NewRecorder()
 
-				h.HandleOrder(w, req)
+				h.HandleOrder(rec, req)
 
-				resp := w.Result()
+				resp := rec.Result()
 				if resp.StatusCode != expectedStatus {
 					errCh <- fmt.Errorf("order %d expected status %d, got %d", idx, expectedStatus, resp.StatusCode)
 					continue
@@ -425,7 +423,7 @@ func TestHandler_Stress(t *testing.T) {
 					errCh <- fmt.Errorf("order %d expected status error, got %q", idx, out.Status)
 				}
 			}
-		}(w)
+		})
 	}
 
 	wg.Wait()
