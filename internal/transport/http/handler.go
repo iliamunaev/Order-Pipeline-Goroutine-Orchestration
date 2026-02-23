@@ -1,4 +1,5 @@
-// Package httptransport exposes HTTP handlers for order processing.
+// Package httptransport implements the HTTP transport layer 
+// for order processing.
 package httptransport
 
 import (
@@ -15,13 +16,17 @@ type orderProcessor interface {
 	Process(ctx context.Context, req model.OrderRequest) ([]model.StepResult, error)
 }
 
-// Handler wires HTTP requests to order orchestration.
+// Handler handles HTTP requests to order orchestration.
 type Handler struct {
 	orderProcessor orderProcessor
 	requestTimeout time.Duration
 }
 
-// New creates a Handler with the provided order service.
+// New returns a Handler configured with the given orderProcessor
+// and request timeout.
+//
+// It panics if orderProcessor is nil. If requestTimeout is non-positive,
+// a default timeout is applied.
 func New(orderProcessor orderProcessor, requestTimeout time.Duration) *Handler {
 	if orderProcessor == nil {
 		panic("handler.New: nil order processor")
@@ -35,7 +40,11 @@ func New(orderProcessor orderProcessor, requestTimeout time.Duration) *Handler {
 	}
 }
 
-// HandleOrder validates, processes, and responds to an order request.
+// HandleOrder processes an order request.
+//
+// The request must be a POST with a valid JSON body.
+// Processing is executed with a per-request timeout.
+// The response always contains a structured OrderResponse.
 func (h *Handler) HandleOrder(w http.ResponseWriter, r *http.Request) {
 	// Request validation
 	if r.Method != http.MethodPost {
@@ -95,6 +104,8 @@ func (h *Handler) HandleOrder(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, httpStatus(err), resp)
 }
 
+// writeJSON writes v as a JSON response with the given status code.
+// The Content-Type is set to application/json.
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
