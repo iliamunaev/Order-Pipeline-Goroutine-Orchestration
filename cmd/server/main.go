@@ -1,3 +1,11 @@
+// Order Pipeline is a concurrent order-processing HTTP server.
+//
+// It acts as the composition root: creates shared infrastructure
+// (pool, tracker), builds pipeline steps as closures, wires the
+// order orchestrator and HTTP handler, then starts the server.
+//
+// No other package imports all concrete service types — only main
+// knows how the pieces fit together.
 package main
 
 import (
@@ -61,15 +69,14 @@ func run() error {
 
 	// Configure the HTTP server
 	srv := &http.Server{
-		Addr:              "127.0.0.1:8080", // listen only on localhost
+		Addr:              "127.0.0.1:8080",
 		Handler:           mux,
 		ReadTimeout:       10 * time.Second,
 		ReadHeaderTimeout: 3 * time.Second,
-		WriteTimeout:      requestTimeout + 5*time.Second, // allow time for the entire pipeline to complete
+		WriteTimeout:      requestTimeout + 5*time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
 
-	// Start listening
 	log.Printf("listening on %s", srv.Addr)
 
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
