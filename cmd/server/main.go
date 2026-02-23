@@ -59,11 +59,11 @@ func run() error {
 
 	// Configure the HTTP server
 	srv := &http.Server{
-		Addr:              "127.0.0.1:8080",
+		Addr:              "127.0.0.1:8080", // listen only on localhost
 		Handler:           mux,
 		ReadTimeout:       10 * time.Second,
 		ReadHeaderTimeout: 3 * time.Second,
-		WriteTimeout:      requestTimeout + 5*time.Second,
+		WriteTimeout:      requestTimeout + 5*time.Second, // allow time for the entire pipeline to complete
 		IdleTimeout:       60 * time.Second,
 	}
 
