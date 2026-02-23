@@ -59,7 +59,7 @@ func run() error {
 
 	// Configure the HTTP server
 	srv := &http.Server{
-		Addr:              ":8080",
+		Addr:              "127.0.0.1:8080",
 		Handler:           mux,
 		ReadTimeout:       10 * time.Second,
 		ReadHeaderTimeout: 3 * time.Second,
