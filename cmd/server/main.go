@@ -30,9 +30,11 @@ func run() error {
 	const requestTimeout = 10 * time.Second
 	const poolSize = 5
 
+	// Create shared infrastructure
 	p := pool.New(poolSize)
 	tr := &tracker.Tracker{}
 
+	// Build the pipeline steps
 	steps := []order.Step{
 		{Name: "payment", Run: func(ctx context.Context, req model.OrderRequest) error {
 			return payment.Process(ctx, req, tr)
@@ -45,12 +47,17 @@ func run() error {
 		}},
 	}
 
+	// Construct the order service
 	orderSvc := order.New(steps)
+
+	// Construct the HTTP handler
 	h := httptransport.New(orderSvc, requestTimeout)
 
+	// Set up routing
 	mux := http.NewServeMux()
 	mux.HandleFunc("/order", h.HandleOrder)
 
+	// Configure the HTTP server
 	srv := &http.Server{
 		Addr:              ":8080",
 		Handler:           mux,
@@ -60,6 +67,7 @@ func run() error {
 		IdleTimeout:       60 * time.Second,
 	}
 
+	// Start listening
 	log.Printf("listening on %s", srv.Addr)
 
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {

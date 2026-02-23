@@ -38,6 +38,7 @@ func New(orderProcessor orderProcessor, requestTimeout time.Duration) *Handler {
 
 // HandleOrder validates, processes, and responds to an order request.
 func (h *Handler) HandleOrder(w http.ResponseWriter, r *http.Request) {
+	// Request validation
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -70,11 +71,14 @@ func (h *Handler) HandleOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Set a deadline for the entire pipline
 	ctx, cancel := context.WithTimeout(r.Context(), h.requestTimeout)
 	defer cancel()
 
+	// Call the order processor
 	steps, err := h.orderProcessor.Process(ctx, req)
 
+	// Build the response
 	resp := model.OrderResponse{
 		Status:  "ok",
 		OrderID: req.OrderID,
@@ -88,6 +92,7 @@ func (h *Handler) HandleOrder(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Write the response
 	writeJSON(w, httpStatus(err), resp)
 }
 
