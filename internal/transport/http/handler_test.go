@@ -12,13 +12,13 @@ import (
 	"testing"
 	"time"
 
-	"order-pipeline/internal/model"
-	"order-pipeline/internal/order"
-	"order-pipeline/internal/service/courier"
-	"order-pipeline/internal/service/payment"
-	"order-pipeline/internal/service/pool"
-	"order-pipeline/internal/service/tracker"
-	"order-pipeline/internal/service/vendor"
+	"github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration/internal/model"
+	"github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration/internal/order"
+	"github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration/internal/service/courier"
+	"github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration/internal/service/payment"
+	"github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration/internal/service/pool"
+	"github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration/internal/service/tracker"
+	"github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration/internal/service/vendor"
 )
 
 // --- stubs for unit tests ---

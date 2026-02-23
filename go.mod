@@ -1,4 +1,4 @@
-module order-pipeline
+module github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration
 
 go 1.25.0
 

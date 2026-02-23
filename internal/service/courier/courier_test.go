@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"order-pipeline/internal/model"
-	"order-pipeline/internal/service/pool"
-	"order-pipeline/internal/service/tracker"
+	"github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration/internal/model"
+	"github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration/internal/service/pool"
+	"github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration/internal/service/tracker"
 )
 
 func TestAssign(t *testing.T) {

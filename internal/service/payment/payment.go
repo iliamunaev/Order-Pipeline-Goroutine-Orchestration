@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"order-pipeline/internal/model"
-	"order-pipeline/internal/service/shared"
-	"order-pipeline/internal/service/tracker"
+	"github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration/internal/model"
+	"github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration/internal/service/shared"
+	"github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration/internal/service/tracker"
 )
 
 type declinedError struct{}
@@ -21,6 +21,7 @@ var ErrDeclined = declinedError{}
 
 // Process runs the payment step for an order.
 func Process(ctx context.Context, req model.OrderRequest, tr *tracker.Tracker) error {
+	// Track the running step
 	tr.Inc()
 	defer tr.Dec()
 

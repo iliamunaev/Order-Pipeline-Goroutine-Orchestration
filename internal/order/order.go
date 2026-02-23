@@ -9,7 +9,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"order-pipeline/internal/model"
+	"github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration/internal/model"
 )
 
 // Step is a named unit of work in the order pipeline.

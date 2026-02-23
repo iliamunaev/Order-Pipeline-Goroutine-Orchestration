@@ -7,28 +7,21 @@ package tracker
 
 import "sync/atomic"
 
-// Tracker counts running steps using atomics.
+// Tracker counts running steps using lock-free atomic operations.
 //
-// It is used to track the number of in-flight steps (goroutines).
+// It uses atomic.Int64 to store the counter value safely
+// under concurrent access.
 type Tracker struct {
 	running atomic.Int64
 }
 
 // Inc increments the running step count.
-//
-// Internally, it uses atomic.AddInt64 to increment the counter.
-// Each goroutine should call Inc before starting its work,
-// and Dec after completing its work.
+// Each goroutine should call Inc before starting its work.
 func (t *Tracker) Inc() { t.running.Add(1) }
 
 // Dec decrements the running step count.
-//
-// It uses atomic.AddInt64 to decrement the counter.
-// Each goroutine should call Dec after completing its work
-// to ensure the counter is decremented correctly.
+// Each goroutine should call Dec after completing its work.
 func (t *Tracker) Dec() { t.running.Add(-1) }
 
 // Running returns the current number of in-flight steps.
-//
-// It uses atomic.LoadInt64 to return the current value of the counter.
 func (t *Tracker) Running() int64 { return t.running.Load() }

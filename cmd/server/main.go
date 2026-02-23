@@ -7,14 +7,14 @@ import (
 	"net/http"
 	"time"
 
-	"order-pipeline/internal/model"
-	"order-pipeline/internal/order"
-	"order-pipeline/internal/service/courier"
-	"order-pipeline/internal/service/payment"
-	"order-pipeline/internal/service/pool"
-	"order-pipeline/internal/service/tracker"
-	"order-pipeline/internal/service/vendor"
-	httptransport "order-pipeline/internal/transport/http"
+	"github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration/internal/model"
+	"github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration/internal/order"
+	"github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration/internal/service/courier"
+	"github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration/internal/service/payment"
+	"github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration/internal/service/pool"
+	"github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration/internal/service/tracker"
+	"github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration/internal/service/vendor"
+	httptransport "github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration/internal/transport/http"
 )
 
 func main() {
@@ -30,8 +30,10 @@ func run() error {
 	const requestTimeout = 10 * time.Second
 	const poolSize = 5
 
-	// Create shared infrastructure
+	// Create bounded concurrency semaphore
 	p := pool.New(poolSize)
+
+	// Set up goroutine tracker
 	tr := &tracker.Tracker{}
 
 	// Build the pipeline steps

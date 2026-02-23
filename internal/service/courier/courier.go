@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"order-pipeline/internal/model"
-	"order-pipeline/internal/service/shared"
-	"order-pipeline/internal/service/tracker"
+	"github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration/internal/model"
+	"github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration/internal/service/shared"
+	"github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration/internal/service/tracker"
 )
 
 type noCourierError struct{}
@@ -27,6 +27,7 @@ type limiter interface {
 
 // Assign runs the courier assignment step for an order.
 func Assign(ctx context.Context, req model.OrderRequest, l limiter, tr *tracker.Tracker) error {
+	// Track the running step
 	tr.Inc()
 	defer tr.Dec()
 

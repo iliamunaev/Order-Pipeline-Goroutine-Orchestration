@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"order-pipeline/internal/model"
+	"github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration/internal/model"
 )
 
 type orderProcessor interface {

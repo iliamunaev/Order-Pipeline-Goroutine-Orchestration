@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"order-pipeline/internal/model"
-	"order-pipeline/internal/service/tracker"
+	"github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration/internal/model"
+	"github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration/internal/service/tracker"
 )
 
 func TestProcess(t *testing.T) {
