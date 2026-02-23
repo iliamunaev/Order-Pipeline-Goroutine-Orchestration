@@ -8,6 +8,11 @@ The project simulates a real-world delivery order flow to demonstrate
 Go concurrency patterns, structured error handling, clean architecture, and
 thorough testing.
 
+## Packege docs
+```bash
+https://pkg.go.dev/github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration
+```
+
 ## Features
 
 - **Structured concurrency** — `errgroup.WithContext` launches parallel steps
@@ -137,8 +142,6 @@ curl -i -X POST http://localhost:8080/order \
 │   │   ├── pool
 │   │   │   ├── pool.go              channel-based semaphore (1–128 slots)
 │   │   │   └── pool_test.go
-│   │   ├── shared
-│   │   │   └── shared.go            DelayForStep + SleepOrDone helpers
 │   │   ├── tracker
 │   │   │   ├── tracker.go           atomic in-flight counter
 │   │   │   └── tracker_test.go
@@ -167,9 +170,9 @@ main.go
  ├── model
  ├── order          → model
  ├── httptransport  → model
- ├── payment        → model, shared, tracker
- ├── vendor         → model, shared, tracker
- ├── courier        → model, shared, tracker
+ ├── payment        → model, tracker
+ ├── vendor         → model, tracker
+ ├── courier        → model, tracker
  ├── pool           → (stdlib only)
  └── tracker        → (stdlib only)
 ```

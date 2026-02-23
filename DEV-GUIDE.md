@@ -30,8 +30,6 @@ External dependency: `golang.org/x/sync` (errgroup).
 │   │   ├── pool
 │   │   │   ├── pool.go              channel-based semaphore (1–128 slots)
 │   │   │   └── pool_test.go
-│   │   ├── shared
-│   │   │   └── shared.go            DelayForStep + SleepOrDone helpers
 │   │   ├── tracker
 │   │   │   ├── tracker.go           atomic counter for in-flight step monitoring
 │   │   │   └── tracker_test.go
@@ -60,9 +58,9 @@ main.go
  ├── model
  ├── order          → model
  ├── httptransport  → model
- ├── payment        → model, shared, tracker
- ├── vendor         → model, shared, tracker
- ├── courier        → model, shared, tracker
+ ├── payment        → model, tracker
+ ├── vendor         → model, tracker
+ ├── courier        → model, tracker
  ├── pool           → (stdlib only)
  └── tracker        → (stdlib only)
 ```
@@ -113,8 +111,10 @@ Key rules:
 - **`sync.WaitGroup.Go`** (Go 1.25+) — used in tests to launch goroutines
   without manual `Add`/`Done` pairing. Eliminates a common source of
   deadlocks and panics.
-- **SleepOrDone** — `time.NewTimer` + `select` on `ctx.Done()`. Properly
-  stops the timer on cancellation (no goroutine leak).
+- **sleepOrDone** — `time.NewTimer` + `select` on `ctx.Done()`. Properly
+  stops the timer on cancellation (no goroutine leak). Inlined into each
+  service package following "a little copying is better than a little
+  dependency."
 
 ### Error handling
 
@@ -365,3 +365,10 @@ handles `Add(1)` and `defer Done()` internally. The stress test and tracker
 concurrency test use it to eliminate the `Add`/`Done` boilerplate and the
 risk of mismatched calls. The production pipeline uses `errgroup.Go` for
 its cancel-on-first-error semantics.
+
+**Inlined helpers instead of a shared package** — `delayForStep` and
+`sleepOrDone` are ~13 lines each. Rather than a `shared` package that
+every service imports, each service carries its own private copy. This
+follows the Go proverb "a little copying is better than a little
+dependency" — each service is fully self-contained with no horizontal
+coupling to siblings.

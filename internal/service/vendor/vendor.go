@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration/internal/model"
-	"github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration/internal/service/shared"
 	"github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration/internal/service/tracker"
 )
 
@@ -25,9 +24,9 @@ func Notify(ctx context.Context, req model.OrderRequest, tr *tracker.Tracker) er
 	tr.Inc()
 	defer tr.Dec()
 
-	delay := shared.DelayForStep(req.DelayMS, "vendor", 200*time.Millisecond)
+	delay := delayForStep(req.DelayMS, "vendor", 200*time.Millisecond)
 
-	if err := shared.SleepOrDone(ctx, delay); err != nil {
+	if err := sleepOrDone(ctx, delay); err != nil {
 		return err
 	}
 
@@ -36,4 +35,29 @@ func Notify(ctx context.Context, req model.OrderRequest, tr *tracker.Tracker) er
 	}
 
 	return nil
+}
+
+func delayForStep(delayMS map[string]int64, step string, defaultDelay time.Duration) time.Duration {
+	if delayMS == nil {
+		return defaultDelay
+	}
+	if ms, ok := delayMS[step]; ok && ms > 0 {
+		return time.Duration(ms) * time.Millisecond
+	}
+	return defaultDelay
+}
+
+func sleepOrDone(ctx context.Context, d time.Duration) error {
+	if d <= 0 {
+		return nil
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+
+	select {
+	case <-t.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
