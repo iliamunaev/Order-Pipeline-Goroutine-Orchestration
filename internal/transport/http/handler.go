@@ -1,4 +1,4 @@
-// Package httptransport implements the HTTP transport layer 
+// Package httptransport implements the HTTP transport layer
 // for order processing.
 package httptransport
 
