@@ -4,7 +4,6 @@ package httptransport
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 	"time"
@@ -54,7 +53,7 @@ func (h *Handler) HandleOrder(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	if err := dec.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+	if err := dec.Decode(&struct{}{}); err != io.EOF {
 		writeJSON(w, http.StatusBadRequest, model.OrderResponse{
 			Status: "error",
 			Error:  &model.ErrorPayload{Kind: "bad_request", Message: "invalid JSON"},
