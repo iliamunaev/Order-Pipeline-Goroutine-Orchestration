@@ -1,9 +1,9 @@
 name: Go CI
 
 on:
-  push:
-    branches: ["master"]
   pull_request:
+    branches: ["master"]
+  push:
     branches: ["master"]
 
 permissions:
@@ -15,19 +15,15 @@ concurrency:
 
 jobs:
   fmt:
-    name: Formatting (gofmt)
+    name: fmt
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
-
       - name: Check gofmt
         run: |
           unformatted="$(gofmt -l .)"
@@ -36,19 +32,17 @@ jobs:
             echo "$unformatted"
             exit 1
           fi
+
   lint:
-    name: Lint (golangci-lint)
+    name: lint
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: fmt
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
-
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v7
         with:
@@ -56,58 +50,42 @@ jobs:
           args: --timeout=5m
 
   test:
-    name: Build + Unit Tests
+    name: test
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: lint
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
-
       - name: Build
         run: go build ./...
-
       - name: Unit tests
         run: make test
 
   race:
-    name: Race Detector
+    name: race
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: test
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
-
       - name: Race tests
         run: make test-race
 
   fuzz-smoke:
-    name: Fuzz Smoke (10s)
+    name: fuzz-smoke
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: test
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
-
       - name: Fuzz test
         run: make test-fuzz
