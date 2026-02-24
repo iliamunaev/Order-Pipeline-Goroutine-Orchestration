@@ -91,11 +91,12 @@ Key rules:
    - `courier.Assign` — acquire pool slot, sleep, then check `FailStep`.
 5. When any step fails, errgroup cancels the derived context, which cancels
    the other in-flight steps.
-6. Each step's outcome (timing, status, error kind) is recorded in a
-   mutex-protected map keyed by step name.
-7. After `g.Wait()`, results are flattened to a slice in registration order
-   (payment → vendor → courier), producing deterministic output regardless
-   of goroutine completion order.
+6. Each step's outcome (timing, status, error kind) is written directly
+   to `out[i]` — each goroutine owns a unique slice index, so no mutex
+   is needed. Slots are pre-filled with `Status: "canceled"` as a safe
+   default for steps that never complete.
+7. After `g.Wait()`, results are already in registration order
+   (payment → vendor → courier) — no post-processing needed.
 8. The handler maps the pipeline error to an HTTP status via `errors.go`
    and writes a JSON response.
 
@@ -111,7 +112,7 @@ Key rules:
 - **`sync.WaitGroup.Go`** (Go 1.25+) — used in tests to launch goroutines
   without manual `Add`/`Done` pairing. Eliminates a common source of
   deadlocks and panics.
-- **sleepOrDone** — `time.NewTimer` + `select` on `ctx.Done()`. Properly
+- **waitOrCancel** — `time.NewTimer` + `select` on `ctx.Done()`. Properly
   stops the timer on cancellation (no goroutine leak). Inlined into each
   service package following "a little copying is better than a little
   dependency."
@@ -270,14 +271,16 @@ curl -X POST http://localhost:8080/order \
 ## Testing
 
 ```bash
+make ci              # fmt + vet + lint + race (quick pre-push check)
 make test            # all tests
 make test-race       # with -race
 make test-bench      # benchmarks (pool throughput at various capacities)
-make test-fuzz       # fuzz pool acquire/release for 10s
+make test-fuzz       # fuzz pool acquire/release for 10s (override: FUZZ=FuzzName)
 make test-cover      # coverage report
-make vet             # go vet
-make lint            # golangci-lint
 make test-all        # test + test-race + test-bench + test-fuzz
+make fmt             # go fmt ./...
+make vet             # go vet ./...
+make lint            # golangci-lint
 ```
 
 ### Test strategy
@@ -307,14 +310,15 @@ make test-all        # test + test-race + test-bench + test-fuzz
 
 ### CI
 
-GitHub Actions (`.github/workflows/go.yml`) runs sequentially:
+GitHub Actions (`.github/workflows/go.yml`) runs on push/PR to `master`:
 
 1. **fmt** — `gofmt -l .` (rejects unformatted files)
-2. **lint** — `golangci-lint` with 5-minute timeout
+2. **lint** — `golangci-lint` v2.4.0 with 5-minute timeout
 3. **test** — `go build ./...` + `make test`
-4. **race** — `make test-race` (parallel with fuzz)
-5. **fuzz** — `make test-fuzz` 10-second smoke (parallel with race)
+4. **race** — `make test-race`
+5. **fuzz** — `make test-fuzz` 10-second smoke
 
+All jobs run independently (no `needs` chains).
 `concurrency` with `cancel-in-progress: true` cancels stale runs on the
 same branch.
 
@@ -366,9 +370,14 @@ concurrency test use it to eliminate the `Add`/`Done` boilerplate and the
 risk of mismatched calls. The production pipeline uses `errgroup.Go` for
 its cancel-on-first-error semantics.
 
-**Inlined helpers instead of a shared package** — `delayForStep` and
-`sleepOrDone` are ~13 lines each. Rather than a `shared` package that
+**Inlined helpers instead of a shared package** — `resolveStepDelay` and
+`waitOrCancel` are ~13 lines each. Rather than a `shared` package that
 every service imports, each service carries its own private copy. This
 follows the Go proverb "a little copying is better than a little
 dependency" — each service is fully self-contained with no horizontal
 coupling to siblings.
+
+**Slice-indexed results instead of mutex + map** — `Process` pre-allocates
+`out[i]` per step. Each goroutine writes to its own index — distinct slice
+elements require no synchronization. This eliminates the `sync.Mutex` and
+the post-processing flatten loop, producing deterministic order for free.
