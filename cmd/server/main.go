@@ -25,15 +25,20 @@ import (
 	httptransport "github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration/internal/transport/http"
 )
 
+// main is the entry point for the order pipeline server.
+//
+// It invokes the run function and if it returns an error,
+// it writes the error into stderr and exits the program.
 func main() {
 	if err := run(); err != nil {
 		log.Fatal(err)
 	}
 }
 
-// run wires services and starts the HTTP server.
-// RequestTimeout bounds downstream calls so clients get predictable failures
-// and goroutines are not tied up indefinitely.
+// run starts the HTTP server on 127.0.0.1:8080 and wires dependencies.
+//
+// It returns an error if the server fails to start or exits unexpectedly,
+// excluding a graceful close (http.ErrServerClosed).
 func run() error {
 	const requestTimeout = 10 * time.Second
 	const poolSize = 5
