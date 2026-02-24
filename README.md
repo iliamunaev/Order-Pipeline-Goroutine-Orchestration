@@ -8,10 +8,10 @@ The project simulates a real-world delivery order flow to demonstrate
 Go concurrency patterns, structured error handling, clean architecture, and
 thorough testing.
 
-## Packege docs
-```bash
-https://pkg.go.dev/github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration
-```
+## Package docs
+
+[https://pkg.go.dev/github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration](https://pkg.go.dev/github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration)
+
 
 ## Features
 
