@@ -4,7 +4,6 @@ package order
 import (
 	"context"
 	"errors"
-	"sync"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -41,11 +40,11 @@ type kinder interface {
 func (s *Service) Process(ctx context.Context, req model.OrderRequest) ([]model.StepResult, error) {
 	g, ctx := errgroup.WithContext(ctx)
 
-	results := make(map[string]model.StepResult, len(s.steps))
-	var mu sync.Mutex
+	out := make([]model.StepResult, len(s.steps))
+	for i, step := range s.steps {
+		out[i] = model.StepResult{Name: step.Name, Status: "canceled"}
 
-	for _, step := range s.steps {
-		step := step
+		i, step := i, step
 		g.Go(func() error {
 			start := time.Now()
 			err := step.Run(ctx, req)
@@ -65,27 +64,16 @@ func (s *Service) Process(ctx context.Context, req model.OrderRequest) ([]model.
 				}
 			}
 
-			mu.Lock()
-			results[step.Name] = model.StepResult{
+			out[i] = model.StepResult{
 				Name:       step.Name,
 				Status:     st,
 				DurationMS: durMS,
 				Detail:     detail,
 			}
-			mu.Unlock()
-
 			return err
 		})
 	}
 
 	err := g.Wait()
-
-	out := make([]model.StepResult, 0, len(s.steps))
-	for _, step := range s.steps {
-		if r, ok := results[step.Name]; ok {
-			out = append(out, r)
-		}
-	}
-
 	return out, err
 }
