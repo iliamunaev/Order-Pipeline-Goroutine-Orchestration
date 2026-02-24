@@ -5,8 +5,6 @@
 ci: fmt vet lint test-race
 
 # tests
-test-all: test test-race test-bench test-fuzz
-
 test:
 	go test ./...
 

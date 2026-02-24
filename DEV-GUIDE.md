@@ -83,12 +83,12 @@ Key rules:
 1. `HandleOrder` validates method (POST only) and JSON body (single object,
    no unknown fields, `order_id` required).
 2. A `context.WithTimeout` wraps the request context with `requestTimeout`.
-3. `order.Service.Process` launches goroutines via `errgroup` — one per
+3. `order.Service.Process` launches goroutines via `errgroup` - one per
    injected `Step`.
 4. Each step runs concurrently:
-   - `payment.Process` — sleep, then check `FailStep` / amount.
-   - `vendor.Notify` — sleep, then check `FailStep`.
-   - `courier.Assign` — acquire pool slot, sleep, then check `FailStep`.
+   - `payment.Process` - sleep, then check `FailStep` / amount.
+   - `vendor.Notify` - sleep, then check `FailStep`.
+   - `courier.Assign` - acquire pool slot, sleep, then check `FailStep`.
 5. When any step fails, errgroup cancels the derived context, which cancels
    the other in-flight steps.
 6. Each step's outcome (timing, status, error kind) is written directly
@@ -96,7 +96,7 @@ Key rules:
    is needed. Slots are pre-filled with `Status: "canceled"` as a safe
    default for steps that never complete.
 7. After `g.Wait()`, results are already in registration order
-   (payment → vendor → courier) — no post-processing needed.
+   (payment → vendor → courier) - no post-processing needed.
 8. The handler maps the pipeline error to an HTTP status via `errors.go`
    and writes a JSON response.
 
@@ -112,8 +112,7 @@ Key rules:
 - **`sync.WaitGroup.Go`** (Go 1.25+) — used in tests to launch goroutines
   without manual `Add`/`Done` pairing. Eliminates a common source of
   deadlocks and panics.
-- **waitOrCancel** — `time.NewTimer` + `select` on `ctx.Done()`. Properly
-  stops the timer on cancellation (no goroutine leak). Inlined into each
+- **waitOrCancel** — `time.NewTimer` + `select` on `ctx.Done()`. Stops the timer on cancellation (no goroutine leak). Inlined into each
   service package following "a little copying is better than a little
   dependency."
 
@@ -138,13 +137,13 @@ type kinder interface {
 }
 ```
 
-This is idiomatic Go — "accept interfaces at the consumer." Each package
+Follow the rule "accept interfaces at the consumer side." Each package
 discovers error kinds independently via `errors.As`, with zero coupling
 to service packages.
 
 The transport layer's `errors.go` maps kinds to HTTP statuses using a simple
-`kindToStatus` map, with fallbacks for `context.DeadlineExceeded` (→ 504)
-and `context.Canceled` (→ 408).
+`kindToStatus` map, with fallbacks for `context.DeadlineExceeded` (504)
+and `context.Canceled` (408).
 
 | Sentinel                       | Kind                 | HTTP status |
 |--------------------------------|----------------------|-------------|
@@ -317,10 +316,6 @@ GitHub Actions (`.github/workflows/go.yml`) runs on push/PR to `master`:
 3. **test** — `go build ./...` + `make test`
 4. **race** — `make test-race`
 5. **fuzz** — `make test-fuzz` 10-second smoke
-
-All jobs run independently (no `needs` chains).
-`concurrency` with `cancel-in-progress: true` cancels stale runs on the
-same branch.
 
 ---
 

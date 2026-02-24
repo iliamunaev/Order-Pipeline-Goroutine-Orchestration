@@ -40,29 +40,18 @@ thorough testing.
 
 ## Quick start
 
+### Run server:
 ```bash
 git clone https://github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration
 cd Order-Pipeline-Goroutine-Orchestration
 make run
 ```
 
-Server listens on `:8080`.
+Server listens on `127.0.0.1:8080`.
 
-## API
+### Make a request:
 
-### `POST /order`
-
-**Request body**
-
-| Field       | Type              | Required | Description                                            |
-|-------------|-------------------|----------|--------------------------------------------------------|
-| `order_id`  | string            | yes      | Order identifier                                       |
-| `amount`    | int               | no       | Payment amount (<=0 triggers `payment_declined`)       |
-| `fail_step` | string            | no       | Force a failure: `"payment"`, `"vendor"`, `"courier"`  |
-| `delay_ms`  | map[string]int    | no       | Per-step delay overrides in ms                         |
-
-### Examples
-
+Examples:
 **Success (200 OK)**
 
 ```bash
@@ -119,6 +108,19 @@ curl -i -X POST http://localhost:8080/order \
   -H 'Content-Type: application/json' \
   -d '{"order_id":"o-4","amount":10,"delay_ms":{"payment":15000,"vendor":15000,"courier":15000}}'
 ```
+
+## API
+
+### `POST /order`
+
+**Request body**
+
+| Field       | Type              | Required | Description                                            |
+|-------------|-------------------|----------|--------------------------------------------------------|
+| `order_id`  | string            | yes      | Order identifier                                       |
+| `amount`    | int               | no       | Payment amount (<=0 triggers `payment_declined`)       |
+| `fail_step` | string            | no       | Force a failure: `"payment"`, `"vendor"`, `"courier"`  |
+| `delay_ms`  | map[string]int    | no       | Per-step delay overrides in ms                         |
 
 ## Project layout
 
@@ -181,16 +183,15 @@ Dependencies point inward. The transport layer has zero imports of service
 packages — it uses the `orderProcessor` interface. The order package has zero
 imports of service packages — steps are injected via `[]order.Step`.
 
-## Testing
+## Testing and formatting
 
 ```bash
 make ci              # fmt + vet + lint + race (quick pre-push check)
-make test            # run all tests
-make test-race       # with race detector
+make test            # go test ./...
+make test-race       # go test ./... -race -count=1
 make test-bench      # benchmarks (pool throughput at various capacities)
 make test-fuzz       # fuzz pool acquire/release (10s, override: FUZZ=FuzzName)
 make test-cover      # coverage report
-make test-all        # test + race + bench + fuzz
 make fmt             # go fmt ./...
 make vet             # go vet ./...
 make lint            # golangci-lint
@@ -251,9 +252,6 @@ and pull request to `master`:
 3. **test** — builds and runs unit tests
 4. **race** — runs tests with `-race`
 5. **fuzz** — 10-second fuzz smoke test on pool
-
-All jobs run independently (no `needs` chains).
-`concurrency` cancels stale runs on the same branch.
 
 ## Architecture notes
 
