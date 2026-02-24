@@ -184,14 +184,16 @@ imports of service packages — steps are injected via `[]order.Step`.
 ## Testing
 
 ```bash
+make ci              # fmt + vet + lint + race (quick pre-push check)
 make test            # run all tests
 make test-race       # with race detector
 make test-bench      # benchmarks (pool throughput at various capacities)
-make test-fuzz       # fuzz pool acquire/release (10s)
+make test-fuzz       # fuzz pool acquire/release (10s, override: FUZZ=FuzzName)
 make test-cover      # coverage report
-make vet             # static analysis (go vet)
-make lint            # golangci-lint
 make test-all        # test + race + bench + fuzz
+make fmt             # go fmt ./...
+make vet             # go vet ./...
+make lint            # golangci-lint
 ```
 
 ### Test strategy
@@ -245,12 +247,12 @@ GitHub Actions pipeline (`.github/workflows/go.yml`) runs on every push
 and pull request to `master`:
 
 1. **fmt** — verifies `gofmt` formatting
-2. **lint** — runs `golangci-lint`
+2. **lint** — `golangci-lint` v2.4.0
 3. **test** — builds and runs unit tests
 4. **race** — runs tests with `-race`
 5. **fuzz** — 10-second fuzz smoke test on pool
 
-Jobs are sequenced: fmt → lint → test → (race + fuzz in parallel).
+All jobs run independently (no `needs` chains).
 `concurrency` cancels stale runs on the same branch.
 
 ## Architecture notes

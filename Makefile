@@ -1,7 +1,10 @@
-.PHONY: test-all test test-bench test-fuzz \
-		test-race test-cover vet lint fmt run 
+.PHONY: ci test-all test test-race test-bench test-fuzz \
+	test-cover vet lint fmt run
 
-# tests 
+
+ci: fmt vet lint test-race
+
+# tests
 test-all: test test-race test-bench test-fuzz
 
 test:
@@ -13,25 +16,22 @@ test-race:
 test-bench:
 	go test ./... -run=^$$ -bench=. -benchmem -cpu=1,2,4,8 -count=1
 
+FUZZ ?= FuzzPoolAcquireRelease
 test-fuzz:
-	go test ./internal/service/pool -run=^$$ -fuzz=FuzzPoolAcquireRelease -fuzztime=10s -count=1
-
+	go test ./internal/service/pool -run=^$$ -fuzz=$(FUZZ) -fuzztime=10s -count=1
 
 test-cover:
 	go test ./... -coverprofile=coverage.out
 	go tool cover -func=coverage.out
 
-# https://go.dev/src/cmd/vet/doc.go
 vet:
 	go vet ./...
 
-# https://golangci-lint.run/docs/
 lint:
 	golangci-lint run ./...
 
 fmt:
-	gofmt -w .
+	go fmt ./...
 
-# run
 run:
 	go run ./cmd/server

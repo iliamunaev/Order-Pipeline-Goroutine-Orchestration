@@ -36,7 +36,7 @@ type Service struct {
 // It panics if no steps are provided.
 func New(steps []Step) *Service {
 	if len(steps) == 0 {
-		panic("order.New: no steps")
+		panic("order.New: no steps") // caught a programmer error
 	}
 	return &Service{steps: steps}
 }
