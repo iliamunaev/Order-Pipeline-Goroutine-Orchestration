@@ -1,4 +1,7 @@
-// Package payment implements the payment processing step.
+// Package payment provides the payment-processing step used by the order pipeline.
+//
+// Process respects context cancellation and may return a classified domain
+// error when payment is declined or invalid.
 package payment
 
 import (
@@ -18,19 +21,28 @@ func (declinedError) Kind() string  { return "payment_declined" }
 // ErrDeclined is returned when a payment is declined or the amount is invalid.
 var ErrDeclined = declinedError{}
 
-// Process runs the payment step for an order.
+// Process executes the payment step.
+//
+// It simulates latency using a per-step delay override and respects
+// context cancellation. If payment fails validation or is declined,
+// it returns an error wrapping ErrDeclined.
 func Process(ctx context.Context, req model.OrderRequest, tr *tracker.Tracker) error {
 	// Track the running step
-	tr.Inc()
-	defer tr.Dec()
+	if tr != nil {
+		tr.Inc()
+		defer tr.Dec()
+	}
 
-	delay := delayForStep(req.DelayMS, "payment", 150*time.Millisecond)
+	const stepName = "payment"
+	delay := resolveStepDelay(req.DelayMS, stepName, 150*time.Millisecond)
 
-	if err := sleepOrDone(ctx, delay); err != nil {
+	// Block step until the delay elapses or the context is done
+	if err := waitOrCancel(ctx, delay); err != nil {
 		return err
 	}
 
-	if req.FailStep == "payment" {
+	// If the step is configured to fail, return an error
+	if req.FailStep == stepName {
 		return fmt.Errorf("payment: %w", ErrDeclined)
 	}
 
@@ -41,7 +53,11 @@ func Process(ctx context.Context, req model.OrderRequest, tr *tracker.Tracker) e
 	return nil
 }
 
-func delayForStep(delayMS map[string]int64, step string, defaultDelay time.Duration) time.Duration {
+// resolveStepDelay returns the effective delay for a step.
+//
+// If delayMS contains a positive value for the given step (in milliseconds),
+// that value is used. Otherwise, defaultDelay is returned.
+func resolveStepDelay(delayMS map[string]int64, step string, defaultDelay time.Duration) time.Duration {
 	if delayMS == nil {
 		return defaultDelay
 	}
@@ -51,7 +67,11 @@ func delayForStep(delayMS map[string]int64, step string, defaultDelay time.Durat
 	return defaultDelay
 }
 
-func sleepOrDone(ctx context.Context, d time.Duration) error {
+// waitOrCancel blocks for d or until ctx is canceled.
+//
+// It returns nil if the duration elapses, or ctx.Err() if the context
+// is done first. If d <= 0, it returns immediately.
+func waitOrCancel(ctx context.Context, d time.Duration) error {
 	if d <= 0 {
 		return nil
 	}

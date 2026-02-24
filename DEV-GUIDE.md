@@ -111,7 +111,7 @@ Key rules:
 - **`sync.WaitGroup.Go`** (Go 1.25+) — used in tests to launch goroutines
   without manual `Add`/`Done` pairing. Eliminates a common source of
   deadlocks and panics.
-- **sleepOrDone** — `time.NewTimer` + `select` on `ctx.Done()`. Properly
+- **waitOrCancel** — `time.NewTimer` + `select` on `ctx.Done()`. Properly
   stops the timer on cancellation (no goroutine leak). Inlined into each
   service package following "a little copying is better than a little
   dependency."
@@ -366,8 +366,8 @@ concurrency test use it to eliminate the `Add`/`Done` boilerplate and the
 risk of mismatched calls. The production pipeline uses `errgroup.Go` for
 its cancel-on-first-error semantics.
 
-**Inlined helpers instead of a shared package** — `delayForStep` and
-`sleepOrDone` are ~13 lines each. Rather than a `shared` package that
+**Inlined helpers instead of a shared package** — `resolveStepDelay` and
+`waitOrCancel` are ~13 lines each. Rather than a `shared` package that
 every service imports, each service carries its own private copy. This
 follows the Go proverb "a little copying is better than a little
 dependency" — each service is fully self-contained with no horizontal
