@@ -1,10 +1,18 @@
-// Package order orchestrates concurrent order processing.
+// Package order provides a concurrent orchestrator for order processing.
+//
+// A Service coordinates a set of registered steps and executes them
+// concurrently using context-aware cancellation semantics.
+//
+// Steps are executed in parallel. If any step returns a non-nil error,
+// the shared context is canceled and remaining steps are expected to
+// stop promptly. The first non-nil error is returned to the caller.
+//
+// The result slice always preserves step registration order.
 package order
 
 import (
 	"context"
 	"errors"
-	"sync"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -12,7 +20,7 @@ import (
 	"github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration/internal/model"
 )
 
-// Step is a named unit of work in the order pipeline.
+// Steps contract for the order pipeline.
 type Step struct {
 	Name string
 	Run  func(ctx context.Context, req model.OrderRequest) error
@@ -23,7 +31,9 @@ type Service struct {
 	steps []Step
 }
 
-// New creates a Service that runs the given steps concurrently.
+// New returns a Service that executes the provided steps concurrently.
+//
+// It panics if no steps are provided.
 func New(steps []Step) *Service {
 	if len(steps) == 0 {
 		panic("order.New: no steps")
@@ -36,28 +46,35 @@ type kinder interface {
 	Kind() string
 }
 
-// Process runs all steps concurrently and returns per-step results
+// Process executes all configured steps concurrently.
+//
+// Each step receives the same context. If any step returns a non-nil error,
+// the shared context is canceled and remaining steps are expected to abort
+// promptly. The first non-nil error is returned.
+//
+// The returned slice contains one StepResult per registered step,
 // in registration order.
 func (s *Service) Process(ctx context.Context, req model.OrderRequest) ([]model.StepResult, error) {
 	g, ctx := errgroup.WithContext(ctx)
 
-	results := make(map[string]model.StepResult, len(s.steps))
-	var mu sync.Mutex
+	out := make([]model.StepResult, len(s.steps))
+	for i, step := range s.steps {
+		out[i] = model.StepResult{Name: step.Name, Status: "canceled", Detail: "operation not completed"} // pre-fill with default value
 
-	for _, step := range s.steps {
-		step := step
+		// Call the steps concurrently
+		i, step := i, step
 		g.Go(func() error {
 			start := time.Now()
-			err := step.Run(ctx, req)
-			durMS := time.Since(start).Milliseconds()
+			err := step.Run(ctx, req) // execute the step function
+			durationMS := time.Since(start).Milliseconds()
 
-			st := "ok"
+			status := "ok" // default value
 			detail := ""
 			if err != nil {
 				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-					st = "canceled"
+					status = "canceled"
 				} else {
-					st = "error"
+					status = "error"
 					var k kinder
 					if errors.As(err, &k) {
 						detail = k.Kind()
@@ -65,27 +82,16 @@ func (s *Service) Process(ctx context.Context, req model.OrderRequest) ([]model.
 				}
 			}
 
-			mu.Lock()
-			results[step.Name] = model.StepResult{
+			out[i] = model.StepResult{
 				Name:       step.Name,
-				Status:     st,
-				DurationMS: durMS,
+				Status:     status,
+				DurationMS: durationMS,
 				Detail:     detail,
 			}
-			mu.Unlock()
-
 			return err
 		})
 	}
 
 	err := g.Wait()
-
-	out := make([]model.StepResult, 0, len(s.steps))
-	for _, step := range s.steps {
-		if r, ok := results[step.Name]; ok {
-			out = append(out, r)
-		}
-	}
-
 	return out, err
 }

@@ -5,6 +5,7 @@ package httptransport
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"time"
@@ -46,47 +47,27 @@ func New(orderProcessor orderProcessor, requestTimeout time.Duration) *Handler {
 // Processing is executed with a per-request timeout.
 // The response always contains a structured OrderResponse.
 func (h *Handler) HandleOrder(w http.ResponseWriter, r *http.Request) {
-	// Request validation
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
 
 	var req model.OrderRequest
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, model.OrderResponse{
-			Status: "error",
-			Error:  &model.ErrorPayload{Kind: "bad_request", Message: "invalid JSON"},
-		})
-		return
-	}
-	if err := dec.Decode(&struct{}{}); err != io.EOF {
-		writeJSON(w, http.StatusBadRequest, model.OrderResponse{
-			Status: "error",
-			Error:  &model.ErrorPayload{Kind: "bad_request", Message: "invalid JSON"},
-		})
+	if err := decodeStrictJSON(r, &req); err != nil {
+		badRequest(w, "invalid JSON")
 		return
 	}
 
 	if req.OrderID == "" {
-		writeJSON(w, http.StatusBadRequest, model.OrderResponse{
-			Status:  "error",
-			OrderID: req.OrderID,
-			Error:   &model.ErrorPayload{Kind: "bad_request", Message: "order_id is required"},
-		})
+		badRequest(w, "order_id is required")
 		return
 	}
 
-	// Set a deadline for the entire pipline
 	ctx, cancel := context.WithTimeout(r.Context(), h.requestTimeout)
 	defer cancel()
 
-	// Call the order processor
 	steps, err := h.orderProcessor.Process(ctx, req)
 
-	// Build the response
 	resp := model.OrderResponse{
 		Status:  "ok",
 		OrderID: req.OrderID,
@@ -100,8 +81,34 @@ func (h *Handler) HandleOrder(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Write the response
 	writeJSON(w, httpStatus(err), resp)
+}
+
+// decodeStrictJSON decodes the JSON request body into the given destination.
+// It disallows unknown fields and enforces a single JSON value in the body.
+func decodeStrictJSON(r *http.Request, dst any) error {
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+
+	if err := dec.Decode(dst); err != nil {
+		return err
+	}
+
+	// Enforce a single JSON value in the body.
+	if err := dec.Decode(&struct{}{}); err != io.EOF {
+		return errors.New("multiple JSON values")
+	}
+
+	return nil
+}
+
+// badRequest writes a JSON response with a 400 status code and a bad_request error.
+// It is used to respond to requests with invalid JSON.
+func badRequest(w http.ResponseWriter, msg string) {
+	writeJSON(w, http.StatusBadRequest, model.OrderResponse{
+		Status: "error",
+		Error:  &model.ErrorPayload{Kind: "bad_request", Message: msg},
+	})
 }
 
 // writeJSON writes v as a JSON response with the given status code.
