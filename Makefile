@@ -1,10 +1,7 @@
-.PHONY: ci test-all test test-race test-bench test-fuzz \
-	test-cover vet lint fmt run
-
+.PHONY: ci test test-race test-bench test-fuzz test-cover vet lint fmt run
 
 ci: fmt vet lint test-race
 
-# tests
 test:
 	go test ./...
 
@@ -14,12 +11,11 @@ test-race:
 test-bench:
 	go test ./... -run=^$$ -bench=. -benchmem -cpu=1,2,4,8 -count=1
 
-FUZZ ?= FuzzPoolAcquireRelease
 test-fuzz:
-	go test ./internal/service/pool -run=^$$ -fuzz=$(FUZZ) -fuzztime=10s -count=1
+	go test ./internal/transport/http -run=^$$ -fuzz=FuzzHandleOrder -fuzztime=10s -count=1
 
 test-cover:
-	go test ./internal/service/... ./internal/transport/... -coverprofile=coverage.out
+	go test ./internal/order/... ./internal/service/... ./internal/transport/... -coverprofile=coverage.out
 	go tool cover -func=coverage.out
 
 vet:

@@ -17,6 +17,7 @@ func TestNotify(t *testing.T) {
 	tests := []struct {
 		name    string
 		req     model.OrderRequest
+		tr      *tracker.Tracker
 		wantErr error
 	}{
 		{
@@ -26,6 +27,7 @@ func TestNotify(t *testing.T) {
 				Amount:  500,
 				DelayMS: map[string]int64{"vendor": 1},
 			},
+			tr: tr,
 		},
 		{
 			name: "fail_step",
@@ -35,7 +37,17 @@ func TestNotify(t *testing.T) {
 				FailStep: "vendor",
 				DelayMS:  map[string]int64{"vendor": 1},
 			},
+			tr:      tr,
 			wantErr: ErrUnavailable,
+		},
+		{
+			name: "nil_tracker",
+			req: model.OrderRequest{
+				OrderID: "o-4",
+				Amount:  500,
+				DelayMS: map[string]int64{"vendor": 1},
+			},
+			tr: nil,
 		},
 	}
 
@@ -44,7 +56,7 @@ func TestNotify(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := Notify(context.Background(), tt.req, tr)
+			err := Notify(context.Background(), tt.req, tt.tr)
 			if tt.wantErr == nil && err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -52,5 +64,23 @@ func TestNotify(t *testing.T) {
 				t.Fatalf("expected %v, got %v", tt.wantErr, err)
 			}
 		})
+	}
+}
+
+func TestNotify_ContextCanceled(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	req := model.OrderRequest{
+		OrderID: "o-5",
+		Amount:  500,
+		DelayMS: map[string]int64{"vendor": 100},
+	}
+
+	err := Notify(ctx, req, nil)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
 	}
 }

@@ -19,7 +19,8 @@ External dependency: `golang.org/x/sync` (errgroup).
 │   ├── model
 │   │   └── order.go                 request / response DTOs
 │   ├── order
-│   │   └── order.go                 orchestration — Step type, errgroup, deterministic results
+│   │   ├── order.go                 orchestration — Step type, errgroup, deterministic results
+│   │   └── order_test.go            unit tests — panic, success, cancel, deadline, ordering
 │   ├── service
 │   │   ├── courier
 │   │   │   ├── courier.go           courier step — bounded-concurrency assignment
@@ -40,7 +41,7 @@ External dependency: `golang.org/x/sync` (errgroup).
 │       └── http
 │           ├── errors.go            error-kind extraction + HTTP status mapping
 │           ├── handler.go           HTTP handler — decode, validate, delegate, respond
-│           └── handler_test.go      unit tests (stub) + integration + stress tests
+│           └── handler_test.go      unit + integration + stress + fuzz tests
 ├── .github
 │   └── workflows
 │       └── go.yml                   CI pipeline (fmt → lint → test → race → fuzz)
@@ -274,9 +275,8 @@ make ci              # fmt + vet + lint + race (quick pre-push check)
 make test            # all tests
 make test-race       # with -race
 make test-bench      # benchmarks (pool throughput at various capacities)
-make test-fuzz       # fuzz pool acquire/release for 10s (override: FUZZ=FuzzName)
+make test-fuzz       # fuzz HTTP handler JSON input (10s)
 make test-cover      # coverage report
-make test-all        # test + test-race + test-bench + test-fuzz
 make fmt             # go fmt ./...
 make vet             # go vet ./...
 make lint            # golangci-lint
@@ -284,8 +284,14 @@ make lint            # golangci-lint
 
 ### Test strategy
 
+- **Order orchestrator tests** — `order_test.go` tests the core concurrency
+  logic in isolation using inline step functions: panic on empty steps,
+  all-success, domain error cancels siblings, pre-canceled context,
+  deadline exceeded, error without `Kind()`, and deterministic result
+  ordering regardless of step completion order.
 - **Unit tests (stub-based)** — `handler_test.go` uses a `stubProcessor` to
-  test HTTP validation, success responses, and error mapping in isolation
+  test HTTP validation (including unknown fields rejection and double JSON
+  body rejection), success responses, and error mapping in isolation
   from real services.
 - **Error classification tests** — `handler_test.go` verifies `errorKind()`
   and `httpStatus()` for every sentinel error, wrapped errors, context
@@ -297,13 +303,13 @@ make lint            # golangci-lint
   (20,000 requests) with mixed success/failure scenarios using
   `sync.WaitGroup.Go`, verifying correctness under concurrency.
   Skipped with `-short`.
-- **Service tests** — each service package has table-driven tests for success
-  and failure paths.
-- **Courier timeout test** — `TestAssignContextTimeout` verifies that a
-  blocked pool acquire returns `context.DeadlineExceeded` when the context
-  expires.
+- **Handler fuzz test** — `FuzzHandleOrder` feeds random byte slices as
+  request bodies to verify the handler never panics or returns unexpected
+  status codes on malformed input.
+- **Service tests** — each service package has table-driven tests for success,
+  failure, context cancellation, and nil tracker.
 - **Pool tests** — size clamping, acquire/release blocking semantics, context
-  timeout, parallel benchmark at 1/2/8/64/128 capacity, fuzz test.
+  timeout, parallel benchmark at 1/2/8/64/128 capacity.
 - **Tracker tests** — basic inc/dec, concurrent safety with 10 goroutines ×
   100 iterations using `sync.WaitGroup.Go`.
 
@@ -315,7 +321,7 @@ GitHub Actions (`.github/workflows/go.yml`) runs on push/PR to `master`:
 2. **lint** — `golangci-lint` v2.4.0 with 5-minute timeout
 3. **test** — `go build ./...` + `make test`
 4. **race** — `make test-race`
-5. **fuzz** — `make test-fuzz` 10-second smoke
+5. **fuzz** — `make test-fuzz` 10-second smoke (handler JSON input)
 
 ---
 

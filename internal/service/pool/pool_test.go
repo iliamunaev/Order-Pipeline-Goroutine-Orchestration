@@ -27,28 +27,6 @@ func BenchmarkPoolParallel(b *testing.B) {
 	}
 }
 
-func FuzzPoolAcquireRelease(f *testing.F) {
-	f.Add(1)
-	f.Fuzz(func(t *testing.T, n int) {
-		if n <= 0 {
-			n = 1
-		}
-		if n > 128 {
-			n = 128
-		}
-
-		p := New(n)
-
-		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-		defer cancel()
-
-		if err := p.Acquire(ctx); err != nil {
-			t.Fatalf("acquire: %v (n=%d)", err, n)
-		}
-		p.Release()
-	})
-}
-
 var poolSizesTests = []struct {
 	in  int
 	out int
@@ -68,14 +46,15 @@ var poolSizesTests = []struct {
 }
 
 func TestNewPoolSize(t *testing.T) {
+	t.Parallel()
+
 	for _, tt := range poolSizesTests {
 		tt := tt
 		t.Run(fmt.Sprintf("size=%d", tt.in), func(t *testing.T) {
-			pool := New(tt.in)
-			if pool == nil {
-				t.Fatalf("New(%d) returned pool == nil", tt.in)
-			}
-			if got := cap(pool.sem); got != tt.out {
+			t.Parallel()
+
+			p := New(tt.in)
+			if got := cap(p.sem); got != tt.out {
 				t.Errorf("New(%d): got %d, want %d", tt.in, got, tt.out)
 			}
 		})
@@ -96,16 +75,14 @@ var slotsTests = []struct {
 	{size: 128},
 }
 
-// TestPoolAcquireRelease verifies that a blocked acquire unblocks after a release.
+// A blocked Acquire must unblock exactly once after a single Release.
 func TestPoolAcquireRelease(t *testing.T) {
+	t.Parallel()
+
 	for _, tt := range slotsTests {
 		tt := tt
 		t.Run(fmt.Sprintf("size=%d", tt.size), func(t *testing.T) {
 			pool := New(tt.size)
-			if pool == nil {
-				t.Fatalf("New(%d) returned pool == nil", tt.size)
-			}
-
 			slots := cap(pool.sem)
 
 			acquired := 0
@@ -158,17 +135,13 @@ func TestPoolAcquireRelease(t *testing.T) {
 	}
 }
 
-// TestPoolAcquireContextTimeout verifies that acquire returns
-// context.DeadlineExceeded when the pool is full and the context expires.
 func TestPoolAcquireContextTimeout(t *testing.T) {
+	t.Parallel()
+
 	for _, tt := range slotsTests {
 		tt := tt
 		t.Run(fmt.Sprintf("size=%d", tt.size), func(t *testing.T) {
 			pool := New(tt.size)
-			if pool == nil {
-				t.Fatalf("New(%d) returned pool == nil", tt.size)
-			}
-
 			slots := cap(pool.sem)
 
 			acquired := 0

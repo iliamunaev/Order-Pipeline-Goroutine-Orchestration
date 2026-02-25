@@ -133,7 +133,8 @@ curl -i -X POST http://localhost:8080/order \
 │   ├── model
 │   │   └── order.go                 request / response DTOs
 │   ├── order
-│   │   └── order.go                 orchestration — Step type, errgroup, deterministic results
+│   │   ├── order.go                 orchestration — Step type, errgroup, deterministic results
+│   │   └── order_test.go
 │   ├── service
 │   │   ├── courier
 │   │   │   ├── courier.go           courier assignment with bounded concurrency
@@ -154,7 +155,7 @@ curl -i -X POST http://localhost:8080/order \
 │       └── http
 │           ├── errors.go            error-kind extraction + HTTP status mapping
 │           ├── handler.go           HTTP handler — validate, delegate, respond
-│           └── handler_test.go      unit + integration + stress tests
+│           └── handler_test.go      unit + integration + stress + fuzz tests
 ├── .github
 │   └── workflows
 │       └── go.yml                   CI pipeline (fmt → lint → test → race → fuzz)
@@ -201,7 +202,7 @@ make ci              # fmt + vet + lint + race (quick pre-push check)
 make test            # go test ./...
 make test-race       # go test ./... -race -count=1
 make test-bench      # benchmarks (pool throughput at various capacities)
-make test-fuzz       # fuzz pool acquire/release (10s, override: FUZZ=FuzzName)
+make test-fuzz       # fuzz HTTP handler JSON input (10s)
 make test-cover      # coverage report
 make fmt             # go fmt ./...
 make vet             # go vet ./...
@@ -212,14 +213,16 @@ make lint            # golangci-lint
 
 | Layer          | What is tested                                             | Approach               |
 |----------------|------------------------------------------------------------|------------------------|
-| Handler        | HTTP method, JSON validation, error mapping, success path  | Stub-based unit tests  |
+| Order          | Panic on empty steps, all-success, domain error cancels siblings, pre-canceled ctx, deadline, error without Kind(), result ordering | Unit tests (inline steps) |
+| Handler        | HTTP method, JSON validation, unknown fields, double JSON body, error mapping, success path | Stub-based unit tests  |
 | Handler        | Error kind extraction + HTTP status mapping                | Table-driven           |
 | Handler        | Payment failure cancels vendor + courier                   | Integration test       |
 | Handler        | 20,000 concurrent requests with mixed outcomes             | Stress test            |
-| Payment        | Success, decline, invalid amount                           | Table-driven           |
-| Vendor         | Success, unavailable                                       | Table-driven           |
-| Courier        | Success, failure, context timeout                          | Table-driven           |
-| Pool           | Size clamping, acquire/release, blocking, timeout          | Table-driven + fuzz    |
+| Handler        | Malformed/random JSON body cannot crash the handler        | Fuzz test              |
+| Payment        | Success, decline, invalid amount, context cancel, nil tracker | Table-driven         |
+| Vendor         | Success, unavailable, context cancel, nil tracker          | Table-driven           |
+| Courier        | Success, failure, context timeout, context cancel, nil tracker | Table-driven       |
+| Pool           | Size clamping, acquire/release blocking, context timeout   | Table-driven           |
 | Pool           | Throughput at 1/2/8/64/128 capacity                        | Parallel benchmark     |
 | Tracker        | Inc/dec correctness, concurrent safety (`WaitGroup.Go`)    | Parallel goroutines    |
 
@@ -262,7 +265,7 @@ and pull request to `master`:
 2. **lint** — `golangci-lint` v2.4.0
 3. **test** — builds and runs unit tests
 4. **race** — runs tests with `-race`
-5. **fuzz** — 10-second fuzz smoke test on pool
+5. **fuzz** — 10-second fuzz smoke test (handler JSON input)
 
 ## Architecture notes
 
