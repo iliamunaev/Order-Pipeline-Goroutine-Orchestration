@@ -17,6 +17,7 @@ func TestProcess(t *testing.T) {
 	tests := []struct {
 		name    string
 		req     model.OrderRequest
+		tr      *tracker.Tracker
 		wantErr error
 	}{
 		{
@@ -26,6 +27,7 @@ func TestProcess(t *testing.T) {
 				Amount:  1200,
 				DelayMS: map[string]int64{"payment": 1},
 			},
+			tr: tr,
 		},
 		{
 			name: "fail_step",
@@ -35,6 +37,7 @@ func TestProcess(t *testing.T) {
 				FailStep: "payment",
 				DelayMS:  map[string]int64{"payment": 1},
 			},
+			tr:      tr,
 			wantErr: ErrDeclined,
 		},
 		{
@@ -44,7 +47,17 @@ func TestProcess(t *testing.T) {
 				Amount:  0,
 				DelayMS: map[string]int64{"payment": 1},
 			},
+			tr:      tr,
 			wantErr: ErrDeclined,
+		},
+		{
+			name: "nil_tracker",
+			req: model.OrderRequest{
+				OrderID: "o-4",
+				Amount:  500,
+				DelayMS: map[string]int64{"payment": 1},
+			},
+			tr: nil,
 		},
 	}
 
@@ -53,7 +66,7 @@ func TestProcess(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := Process(context.Background(), tt.req, tr)
+			err := Process(context.Background(), tt.req, tt.tr)
 			if tt.wantErr == nil && err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -61,5 +74,23 @@ func TestProcess(t *testing.T) {
 				t.Fatalf("expected %v, got %v", tt.wantErr, err)
 			}
 		})
+	}
+}
+
+func TestProcess_ContextCanceled(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	req := model.OrderRequest{
+		OrderID: "o-6",
+		Amount:  100,
+		DelayMS: map[string]int64{"payment": 100},
+	}
+
+	err := Process(ctx, req, nil)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
 	}
 }

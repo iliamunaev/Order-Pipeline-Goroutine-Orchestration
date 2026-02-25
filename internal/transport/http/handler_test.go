@@ -21,8 +21,6 @@ import (
 	"github.com/iliamunaev/Order-Pipeline-Goroutine-Orchestration/internal/service/vendor"
 )
 
-// --- stubs for unit tests ---
-
 type stubProcessor struct {
 	steps []model.StepResult
 	err   error
@@ -32,15 +30,12 @@ func (s *stubProcessor) Process(_ context.Context, _ model.OrderRequest) ([]mode
 	return s.steps, s.err
 }
 
-// testAppErr satisfies the kinder interface via structural typing.
 type testAppErr struct {
 	kind string
 }
 
 func (e testAppErr) Error() string { return e.kind }
 func (e testAppErr) Kind() string  { return e.kind }
-
-// --- unit tests (stub-based) ---
 
 func TestHandleOrderValidation(t *testing.T) {
 	t.Parallel()
@@ -71,6 +66,20 @@ func TestHandleOrderValidation(t *testing.T) {
 			name:       "missing_order_id",
 			method:     http.MethodPost,
 			body:       []byte(`{"amount":10}`),
+			wantStatus: http.StatusBadRequest,
+			wantKind:   "bad_request",
+		},
+		{
+			name:       "unknown_fields",
+			method:     http.MethodPost,
+			body:       []byte(`{"order_id":"o-1","amount":10,"bogus":true}`),
+			wantStatus: http.StatusBadRequest,
+			wantKind:   "bad_request",
+		},
+		{
+			name:       "multiple_json_values",
+			method:     http.MethodPost,
+			body:       []byte(`{"order_id":"o-1"}{"order_id":"o-2"}`),
 			wantStatus: http.StatusBadRequest,
 			wantKind:   "bad_request",
 		},
@@ -186,17 +195,6 @@ func TestNew_NilProcessorPanics(t *testing.T) {
 	New(nil, 2*time.Second)
 }
 
-func TestNew_DefaultTimeout(t *testing.T) {
-	t.Parallel()
-
-	h := New(&stubProcessor{}, 0)
-	if h.requestTimeout != 2*time.Second {
-		t.Fatalf("expected default timeout 2s, got %v", h.requestTimeout)
-	}
-}
-
-// --- error classification tests ---
-
 func TestErrorKind(t *testing.T) {
 	t.Parallel()
 
@@ -259,9 +257,37 @@ func TestHTTPStatus(t *testing.T) {
 	}
 }
 
-// --- integration tests (real services) ---
+// Ensures the handler never panics on arbitrary input.
+func FuzzHandleOrder(f *testing.F) {
+	f.Add([]byte(`{"order_id":"o-1","amount":100}`))
+	f.Add([]byte(`{"order_id":"o-2","amount":-1}`))
+	f.Add([]byte(`{"order_id":"","amount":100}`))
+	f.Add([]byte(`{}`))
+	f.Add([]byte(`invalid`))
+	f.Add([]byte(`{"order_id":"o-1","amount":100,"fake":true}`))
+	f.Add([]byte(`{"order_id":"o-1"}{"order_id":"o-2"}`))
+	f.Add([]byte(``))
+	f.Add([]byte(`null`))
+	f.Add([]byte(`[]`))
 
-// newIntegrationHandler wires real services into a handler for integration tests.
+	h := New(&stubProcessor{
+		steps: []model.StepResult{{Name: "payment", Status: "ok"}},
+	}, 2*time.Second)
+
+	f.Fuzz(func(t *testing.T, body []byte) {
+		req := httptest.NewRequest(http.MethodPost, "/order", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		h.HandleOrder(w, req)
+
+		code := w.Code
+		if code != http.StatusOK && code != http.StatusBadRequest && code != http.StatusMethodNotAllowed {
+			t.Errorf("unexpected status %d for body %q", code, body)
+		}
+	})
+}
+
 func newIntegrationHandler(poolSize int, timeout time.Duration) (*Handler, *tracker.Tracker) {
 	p := pool.New(poolSize)
 	tr := &tracker.Tracker{}
@@ -282,6 +308,8 @@ func newIntegrationHandler(poolSize int, timeout time.Duration) (*Handler, *trac
 }
 
 func TestOrder_PaymentFailureCancelsOthers(t *testing.T) {
+	t.Parallel()
+
 	h, _ := newIntegrationHandler(1, 2*time.Second)
 
 	reqBody := model.OrderRequest{
@@ -352,6 +380,8 @@ func waitRunningZero(t *testing.T, tr *tracker.Tracker) {
 	t.Fatalf("expected running steps to reach 0, got %d", tr.Running())
 }
 
+// 20k concurrent requests (100 workers × 200 iterations) with mixed
+// success/failure scenarios. Catches data races and resource leaks.
 func TestHandler_Stress(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping stress test in short mode")

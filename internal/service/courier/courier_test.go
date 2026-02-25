@@ -15,11 +15,12 @@ func TestAssign(t *testing.T) {
 	t.Parallel()
 
 	tr := &tracker.Tracker{}
-	pool := pool.New(1)
+	p := pool.New(1)
 
 	tests := []struct {
 		name    string
 		req     model.OrderRequest
+		tr      *tracker.Tracker
 		wantErr error
 	}{
 		{
@@ -29,6 +30,7 @@ func TestAssign(t *testing.T) {
 				Amount:  800,
 				DelayMS: map[string]int64{"courier": 1},
 			},
+			tr: tr,
 		},
 		{
 			name: "fail_step",
@@ -38,7 +40,17 @@ func TestAssign(t *testing.T) {
 				FailStep: "courier",
 				DelayMS:  map[string]int64{"courier": 1},
 			},
+			tr:      tr,
 			wantErr: ErrNoCourierAvailable,
+		},
+		{
+			name: "nil_tracker",
+			req: model.OrderRequest{
+				OrderID: "o-5",
+				Amount:  800,
+				DelayMS: map[string]int64{"courier": 1},
+			},
+			tr: nil,
 		},
 	}
 
@@ -47,7 +59,7 @@ func TestAssign(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := Assign(context.Background(), tt.req, pool, tr)
+			err := Assign(context.Background(), tt.req, p, tt.tr)
 			if tt.wantErr == nil && err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -58,18 +70,18 @@ func TestAssign(t *testing.T) {
 	}
 }
 
+// Pool is pre-saturated so Assign blocks until the context expires.
 func TestAssignContextTimeout(t *testing.T) {
 	t.Parallel()
 
-	tr := &tracker.Tracker{}
-	pool := pool.New(1)
-	if err := pool.Acquire(context.Background()); err != nil {
+	p := pool.New(1)
+	if err := p.Acquire(context.Background()); err != nil {
 		t.Fatalf("unexpected acquire error: %v", err)
 	}
-	defer pool.Release()
+	defer p.Release()
 
 	req := model.OrderRequest{
-		OrderID: "o-4",
+		OrderID: "o-6",
 		Amount:  800,
 		DelayMS: map[string]int64{"courier": 50},
 	}
@@ -77,8 +89,27 @@ func TestAssignContextTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
 	defer cancel()
 
-	err := Assign(ctx, req, pool, tr)
+	err := Assign(ctx, req, p, nil)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("expected context deadline exceeded, got %v", err)
+	}
+}
+
+func TestAssign_ContextCanceled(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	p := pool.New(1)
+	req := model.OrderRequest{
+		OrderID: "o-7",
+		Amount:  800,
+		DelayMS: map[string]int64{"courier": 100},
+	}
+
+	err := Assign(ctx, req, p, nil)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
 	}
 }
