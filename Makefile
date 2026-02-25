@@ -19,7 +19,7 @@ test-fuzz:
 	go test ./internal/service/pool -run=^$$ -fuzz=$(FUZZ) -fuzztime=10s -count=1
 
 test-cover:
-	go test ./... -coverprofile=coverage.out
+	go test ./internal/service/... ./internal/transport/... -coverprofile=coverage.out
 	go tool cover -func=coverage.out
 
 vet:

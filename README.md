@@ -183,6 +183,17 @@ Dependencies point inward. The transport layer has zero imports of service
 packages — it uses the `orderProcessor` interface. The order package has zero
 imports of service packages — steps are injected via `[]order.Step`.
 
+## Context tree 
+
+```
+r.Context()                           ← Level 0: HTTP request context (net/http)
+  └─ context.WithTimeout(r.Context()) ← Level 1: handler adds 10s deadline
+       └─ errgroup.WithContext(ctx)    ← Level 2: errgroup adds cancel-on-first-error
+            ├─ payment.Process(ctx)    ← leaf: receives Level 2 ctx
+            ├─ vendor.Notify(ctx)      ← leaf: receives Level 2 ctx
+            └─ courier.Assign(ctx)     ← leaf: receives Level 2 ctx
+```
+
 ## Testing and formatting
 
 ```bash
