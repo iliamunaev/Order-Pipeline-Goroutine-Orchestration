@@ -6,10 +6,7 @@ import (
 	"net/http"
 )
 
-// kinder is satisfied by domain errors
-// that carry a classification kind.
 type kinder interface {
-	error
 	Kind() string
 }
 
