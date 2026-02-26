@@ -4,7 +4,7 @@ package model
 // OrderRequest is the input payload for processing an order.
 type OrderRequest struct {
 	OrderID  string           `json:"order_id"`
-	Amount   int64            `json:"amount"`
+	Amount   uint64           `json:"amount"`
 	FailStep string           `json:"fail_step,omitempty"` // "payment" | "vendor" | "courier"
 	DelayMS  map[string]int64 `json:"delay_ms,omitempty"`  // per-step delay override in ms
 }
