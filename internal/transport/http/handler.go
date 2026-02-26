@@ -58,6 +58,11 @@ func (h *Handler) HandleOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.Amount == 0 {
+		badRequest(w, "order_amount should be > 0")
+		return
+	}
+
 	if req.OrderID == "" {
 		badRequest(w, "order_id is required")
 		return
